@@ -62,6 +62,7 @@ QUERY_SORT_ORDERS: Final = ("asc", "desc")
 
 SERVICE_SEARCH: Final = "search"
 SERVICE_QUERY_LIBRARY: Final = "query_library"
+SERVICE_WATCH_STATUS: Final = "watch_status"
 SERVICE_RECENTLY_ADDED: Final = "recently_added"
 SERVICE_RECENTLY_WATCHED: Final = "recently_watched"
 SERVICE_CONTINUE_WATCHING: Final = "continue_watching"
