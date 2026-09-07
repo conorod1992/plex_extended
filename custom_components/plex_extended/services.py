@@ -18,20 +18,34 @@ from .const import (
     DEFAULT_SEARCH_TYPES,
     DOMAIN,
     MAX_LIMIT,
+    QUERY_HDR_STATES,
+    QUERY_MEDIA_TYPES,
+    QUERY_SORT_FIELDS,
+    QUERY_SORT_ORDERS,
+    QUERY_WATCH_STATES,
     SEARCH_TYPES,
     SERVICE_CONTINUE_WATCHING,
     SERVICE_LIST_LIBRARIES,
     SERVICE_LIST_USERS,
     SERVICE_MEDIA_DETAILS,
     SERVICE_ON_DECK,
+    SERVICE_QUERY_LIBRARY,
     SERVICE_RECENTLY_ADDED,
     SERVICE_RECENTLY_WATCHED,
     SERVICE_SEARCH,
     SERVICE_TEST_CONNECTION,
 )
+from .library_query import async_query_library
 
 LIMIT_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_LIMIT))
 MEDIA_TYPES_SCHEMA = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
+TEXT_LIST_SCHEMA = vol.All(
+    cv.ensure_list,
+    [vol.All(cv.string, vol.Length(min=1))],
+)
+YEAR_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=0, max=9999))
+RATING_SCHEMA = vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
+DURATION_SCHEMA = vol.All(vol.Coerce(float), vol.Range(min=0))
 
 TARGET_SCHEMA = {
     vol.Optional(CONF_CONFIG_ENTRY_ID): cv.string,
@@ -47,6 +61,46 @@ SEARCH_SCHEMA = vol.Schema(
         **LIBRARY_SCHEMA,
         vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("search_types", default=DEFAULT_SEARCH_TYPES): MEDIA_TYPES_SCHEMA,
+        vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
+        vol.Optional("include_summary", default=True): cv.boolean,
+        vol.Optional("include_technical", default=False): cv.boolean,
+    }
+)
+
+QUERY_LIBRARY_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
+        vol.Required("media_type"): vol.In(QUERY_MEDIA_TYPES),
+        vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("genres"): TEXT_LIST_SCHEMA,
+        vol.Optional("genres_all"): TEXT_LIST_SCHEMA,
+        vol.Optional("actors"): TEXT_LIST_SCHEMA,
+        vol.Optional("directors"): TEXT_LIST_SCHEMA,
+        vol.Optional("collections"): TEXT_LIST_SCHEMA,
+        vol.Optional("content_ratings"): TEXT_LIST_SCHEMA,
+        vol.Optional("studios"): TEXT_LIST_SCHEMA,
+        vol.Optional("year"): YEAR_SCHEMA,
+        vol.Optional("year_min"): YEAR_SCHEMA,
+        vol.Optional("year_max"): YEAR_SCHEMA,
+        vol.Optional("decade"): YEAR_SCHEMA,
+        vol.Optional("watched_state", default="any"): vol.In(QUERY_WATCH_STATES),
+        vol.Optional("resolutions"): TEXT_LIST_SCHEMA,
+        vol.Optional("hdr", default="any"): vol.In(QUERY_HDR_STATES),
+        vol.Optional("critic_rating_min"): RATING_SCHEMA,
+        vol.Optional("critic_rating_max"): RATING_SCHEMA,
+        vol.Optional("audience_rating_min"): RATING_SCHEMA,
+        vol.Optional("audience_rating_max"): RATING_SCHEMA,
+        vol.Optional("user_rating_min"): RATING_SCHEMA,
+        vol.Optional("user_rating_max"): RATING_SCHEMA,
+        vol.Optional("duration_min_minutes"): DURATION_SCHEMA,
+        vol.Optional("duration_max_minutes"): DURATION_SCHEMA,
+        vol.Optional("added_after"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("added_before"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("last_viewed_after"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("last_viewed_before"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("sort_by"): vol.In(QUERY_SORT_FIELDS),
+        vol.Optional("sort_order"): vol.In(QUERY_SORT_ORDERS),
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
         vol.Optional("include_technical", default=False): cv.boolean,
@@ -158,6 +212,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
         )
 
+    async def handle_query_library(call: ServiceCall) -> ServiceResponse:
+        client = _client_for_call(hass, call)
+        criteria = {
+            key: value
+            for key, value in call.data.items()
+            if key != CONF_CONFIG_ENTRY_ID
+        }
+        return await _translate_errors(async_query_library(client, criteria))
+
     async def handle_recently_added(call: ServiceCall) -> ServiceResponse:
         client = _client_for_call(hass, call)
         return await _translate_errors(
@@ -230,6 +293,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     registrations = (
         (SERVICE_SEARCH, handle_search, SEARCH_SCHEMA),
+        (SERVICE_QUERY_LIBRARY, handle_query_library, QUERY_LIBRARY_SCHEMA),
         (SERVICE_RECENTLY_ADDED, handle_recently_added, RECENT_SCHEMA),
         (SERVICE_RECENTLY_WATCHED, handle_recently_watched, HISTORY_SCHEMA),
         (SERVICE_CONTINUE_WATCHING, handle_continue_watching, BROWSE_SCHEMA),
