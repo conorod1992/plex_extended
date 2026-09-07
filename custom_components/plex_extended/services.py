@@ -37,6 +37,11 @@ from .const import (
     SERVICE_WATCH_STATUS,
 )
 from .library_query import async_query_library
+from .user_context import (
+    async_continue_watching_for_context,
+    async_on_deck_for_context,
+    async_recently_watched_for_context,
+)
 from .viewing_progress import async_watch_status
 
 LIMIT_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_LIMIT))
@@ -56,6 +61,10 @@ LIBRARY_SCHEMA = {
     vol.Optional("library"): cv.string,
     vol.Optional("library_id"): cv.string,
 }
+USER_SCHEMA = {
+    vol.Optional("user"): cv.string,
+    vol.Optional("user_id"): cv.string,
+}
 
 SEARCH_SCHEMA = vol.Schema(
     {
@@ -73,6 +82,7 @@ QUERY_LIBRARY_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
         vol.Required("media_type"): vol.In(QUERY_MEDIA_TYPES),
         vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("genres"): TEXT_LIST_SCHEMA,
@@ -113,6 +123,7 @@ WATCH_STATUS_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
         vol.Optional("rating_key"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("year"): YEAR_SCHEMA,
@@ -136,9 +147,8 @@ HISTORY_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
-        vol.Optional("user"): cv.string,
-        vol.Optional("user_id"): cv.string,
         vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
     }
@@ -148,6 +158,7 @@ BROWSE_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
     }
@@ -198,6 +209,15 @@ def _client_for_call(hass: HomeAssistant, call: ServiceCall) -> PlexExtendedClie
     return client
 
 
+def _criteria(call: ServiceCall) -> dict[str, Any]:
+    """Return service data without Home Assistant-only target metadata."""
+    return {
+        key: value
+        for key, value in call.data.items()
+        if key != CONF_CONFIG_ENTRY_ID
+    }
+
+
 async def _translate_errors(awaitable: Any) -> ServiceResponse:
     """Translate integration errors into Home Assistant action errors."""
     try:
@@ -228,22 +248,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_query_library(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
-        criteria = {
-            key: value
-            for key, value in call.data.items()
-            if key != CONF_CONFIG_ENTRY_ID
-        }
-        return await _translate_errors(async_query_library(client, criteria))
+        return await _translate_errors(
+            async_query_library(_client_for_call(hass, call), _criteria(call))
+        )
 
     async def handle_watch_status(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
-        criteria = {
-            key: value
-            for key, value in call.data.items()
-            if key != CONF_CONFIG_ENTRY_ID
-        }
-        return await _translate_errors(async_watch_status(client, criteria))
+        return await _translate_errors(
+            async_watch_status(_client_for_call(hass, call), _criteria(call))
+        )
 
     async def handle_recently_added(call: ServiceCall) -> ServiceResponse:
         client = _client_for_call(hass, call)
@@ -258,39 +270,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_recently_watched(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
         return await _translate_errors(
-            client.async_recently_watched(
-                call.data.get("limit", DEFAULT_LIMIT),
-                call.data.get("library"),
-                call.data.get("user"),
-                call.data.get("media_types"),
-                call.data.get("include_summary", True),
-                call.data.get("library_id"),
-                call.data.get("user_id"),
+            async_recently_watched_for_context(
+                _client_for_call(hass, call), _criteria(call)
             )
         )
 
     async def handle_continue_watching(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
         return await _translate_errors(
-            client.async_continue_watching(
-                call.data.get("limit", DEFAULT_LIMIT),
-                call.data.get("library"),
-                call.data.get("include_summary", True),
-                call.data.get("library_id"),
+            async_continue_watching_for_context(
+                _client_for_call(hass, call), _criteria(call)
             )
         )
 
     async def handle_on_deck(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
         return await _translate_errors(
-            client.async_on_deck(
-                call.data.get("limit", DEFAULT_LIMIT),
-                call.data.get("library"),
-                call.data.get("include_summary", True),
-                call.data.get("library_id"),
-            )
+            async_on_deck_for_context(_client_for_call(hass, call), _criteria(call))
         )
 
     async def handle_media_details(call: ServiceCall) -> ServiceResponse:
