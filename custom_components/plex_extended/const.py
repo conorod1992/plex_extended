@@ -36,8 +36,32 @@ SEARCH_TYPES: Final = (
     "track",
     "collection",
 )
+QUERY_MEDIA_TYPES: Final = (
+    "movie",
+    "show",
+    "season",
+    "episode",
+    "artist",
+    "album",
+    "track",
+)
+QUERY_WATCH_STATES: Final = ("any", "watched", "unwatched", "in_progress")
+QUERY_HDR_STATES: Final = ("any", "hdr", "sdr")
+QUERY_SORT_FIELDS: Final = (
+    "title",
+    "year",
+    "added_at",
+    "last_viewed_at",
+    "critic_rating",
+    "audience_rating",
+    "user_rating",
+    "duration",
+    "resolution",
+)
+QUERY_SORT_ORDERS: Final = ("asc", "desc")
 
 SERVICE_SEARCH: Final = "search"
+SERVICE_QUERY_LIBRARY: Final = "query_library"
 SERVICE_RECENTLY_ADDED: Final = "recently_added"
 SERVICE_RECENTLY_WATCHED: Final = "recently_watched"
 SERVICE_CONTINUE_WATCHING: Final = "continue_watching"
