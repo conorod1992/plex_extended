@@ -317,6 +317,63 @@ query_library:
       selector:
         boolean:
 
+watch_status:
+  name: TV watch status
+  description: Return episode-level viewing progress for one Plex TV show, including completion, last watched episode, current progress and the next episode to watch.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    rating_key:
+      name: Show rating key
+      description: Stable Plex rating key for the TV show. Preferred when already known from Search or Query library.
+      selector:
+        text:
+    title:
+      name: Show title
+      description: TV show title to resolve when a rating key is not supplied. Exact matches are preferred; ambiguous matches require a rating key or year.
+      selector:
+        text:
+    year:
+      name: Show year
+      description: Optional year to disambiguate shows with the same or similar title.
+      selector:
+        number:
+          min: 0
+          max: 9999
+          mode: box
+    library:
+      name: Library
+      description: Optional exact TV library name.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex TV library section ID returned by List libraries.
+      selector:
+        text:
+    include_specials:
+      name: Include specials
+      description: Include season 0/special episodes in counts, completion and next-episode fallback logic.
+      default: false
+      selector:
+        boolean:
+    include_seasons:
+      name: Include season breakdown
+      description: Include compact watched/unwatched counts for each season.
+      default: true
+      selector:
+        boolean:
+    include_summary:
+      name: Include summaries
+      description: Include show and episode summaries in the returned show/episode objects.
+      default: true
+      selector:
+        boolean:
+
 recently_added:
   name: Recently added
   description: Return recently added Plex media.

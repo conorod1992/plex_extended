@@ -34,8 +34,10 @@ from .const import (
     SERVICE_RECENTLY_WATCHED,
     SERVICE_SEARCH,
     SERVICE_TEST_CONNECTION,
+    SERVICE_WATCH_STATUS,
 )
 from .library_query import async_query_library
+from .viewing_progress import async_watch_status
 
 LIMIT_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_LIMIT))
 MEDIA_TYPES_SCHEMA = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
@@ -104,6 +106,19 @@ QUERY_LIBRARY_SCHEMA = vol.Schema(
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
         vol.Optional("include_technical", default=False): cv.boolean,
+    }
+)
+
+WATCH_STATUS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
+        vol.Optional("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("year"): YEAR_SCHEMA,
+        vol.Optional("include_specials", default=False): cv.boolean,
+        vol.Optional("include_seasons", default=True): cv.boolean,
+        vol.Optional("include_summary", default=True): cv.boolean,
     }
 )
 
@@ -221,6 +236,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         }
         return await _translate_errors(async_query_library(client, criteria))
 
+    async def handle_watch_status(call: ServiceCall) -> ServiceResponse:
+        client = _client_for_call(hass, call)
+        criteria = {
+            key: value
+            for key, value in call.data.items()
+            if key != CONF_CONFIG_ENTRY_ID
+        }
+        return await _translate_errors(async_watch_status(client, criteria))
+
     async def handle_recently_added(call: ServiceCall) -> ServiceResponse:
         client = _client_for_call(hass, call)
         return await _translate_errors(
@@ -294,6 +318,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     registrations = (
         (SERVICE_SEARCH, handle_search, SEARCH_SCHEMA),
         (SERVICE_QUERY_LIBRARY, handle_query_library, QUERY_LIBRARY_SCHEMA),
+        (SERVICE_WATCH_STATUS, handle_watch_status, WATCH_STATUS_SCHEMA),
         (SERVICE_RECENTLY_ADDED, handle_recently_added, RECENT_SCHEMA),
         (SERVICE_RECENTLY_WATCHED, handle_recently_watched, HISTORY_SCHEMA),
         (SERVICE_CONTINUE_WATCHING, handle_continue_watching, BROWSE_SCHEMA),
