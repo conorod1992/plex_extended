@@ -53,3 +53,22 @@ def test_active_streams_does_not_add_playback_control() -> None:
     assert ".stop(" not in backend
     assert "terminate" not in backend.casefold()
     assert ".stop(" not in tool
+
+
+def test_active_streams_public_metadata_and_docs_are_present() -> None:
+    """Developer Tools and README should expose and explain the new query."""
+    services = (COMPONENT / "services.yaml").read_text()
+    readme = (ROOT / "README.md").read_text()
+
+    assert "\nactive_streams:\n" in services
+    assert "name: Active streams" in services
+    assert "plex_extended.active_streams" in readme
+    assert "plex_extended__active_streams" in readme
+    assert "direct_play" in readme
+    assert "direct_stream" in readme
+    assert "transcode" in readme
+
+
+def test_temporary_doc_helper_is_not_retained() -> None:
+    """PR-only helper workflow must not remain in the final branch diff."""
+    assert not (ROOT / ".github" / "workflows" / "pr10-doc-patch.yml").exists()
