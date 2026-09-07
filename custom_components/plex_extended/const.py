@@ -23,7 +23,9 @@ X_PLEX_VERSION: Final = "0.1.0"
 
 DEFAULT_LIMIT: Final = 10
 MAX_LIMIT: Final = 50
+HISTORY_PAGE_SIZE: Final = 100
 DEFAULT_SEARCH_TYPES: Final = ["movie", "show"]
+DEFAULT_LLM_INCLUDE_SUMMARY: Final = False
 SEARCH_TYPES: Final = (
     "movie",
     "show",
