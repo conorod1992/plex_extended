@@ -17,7 +17,27 @@ It complements Home Assistant's built-in Plex integration with response-data act
 
 ## Installation
 
+### During private development
+
+HACS's current repository validator/installer expects public GitHub repository content. While this repository is private, install a development build by copying:
+
+```text
+custom_components/plex_extended
+```
+
+into:
+
+```text
+/config/custom_components/plex_extended
+```
+
+and restart Home Assistant.
+
+Then go to **Settings → Devices & services → Add integration → Plex Extended** and choose **Connect with Plex**.
+
 ### HACS custom repository
+
+Once the repository is public:
 
 1. Add this repository to HACS as an **Integration** custom repository.
 2. Install **Plex Extended**.
@@ -34,7 +54,7 @@ All Plex Extended actions return response data and can therefore be used with `r
 
 ### `plex_extended.search`
 
-Search the user's Plex library. Plex's hub search provides partial/fuzzy matching and Plex relevance ordering.
+Search the user's Plex library. Plex's hub search provides partial/fuzzy matching.
 
 ```yaml
 action: plex_extended.search
@@ -77,14 +97,7 @@ Returns recently added media. Supports `limit`, `library`, `media_types`, and `i
 
 ### `plex_extended.recently_watched`
 
-Returns Plex play history sorted newest first. Supports filtering by:
-
-- Plex user name
-- library
-- media type
-- result limit
-
-When no user is specified, Plex history visible to the configured server token is returned. Results include the Plex account ID/name where available.
+Returns Plex play history sorted newest first. Supports filtering by Plex user name, library, media type, and result limit. When no user is specified, history visible to the configured server token is returned.
 
 ### `plex_extended.continue_watching`
 
@@ -110,7 +123,7 @@ Technical metadata can include container, bitrate, resolution, video/audio codec
 
 ### `plex_extended.list_libraries`
 
-Returns the available Plex library names, section IDs, types, and UUIDs.
+Returns available Plex library names, IDs, types, and UUIDs.
 
 ### `plex_extended.list_users`
 
@@ -122,7 +135,7 @@ Tests the configured Plex connection and returns basic server identity informati
 
 ## Native LLM tools
 
-Home Assistant automatically discovers `custom_components/plex_extended/llm.py`. When Plex Extended is loaded, it contributes tools to Home Assistant's built-in **Assist** LLM API:
+Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/llm.py`. When Plex Extended is loaded, it contributes these tools to the built-in **Assist** LLM API:
 
 - `plex_extended__search`
 - `plex_extended__recently_added`
@@ -133,7 +146,7 @@ Home Assistant automatically discovers `custom_components/plex_extended/llm.py`.
 - `plex_extended__list_libraries`
 - `plex_extended__list_users`
 
-This means a compatible conversation integration can answer questions such as:
+A compatible conversation integration can therefore answer questions such as:
 
 - "Do I have Alien on Plex?"
 - "What movies were added recently?"
@@ -154,9 +167,7 @@ The normal setup flow uses Plex's website authorization process through `plexaut
 4. Plex Extended discovers the account's Plex Media Server resources.
 5. The integration connects to the selected server using that server resource's access token.
 
-Plex Extended never receives or stores the user's Plex password.
-
-If Plex later rejects the configured token, Plex Extended starts a Home Assistant reauthentication flow.
+Plex Extended never receives or stores the user's Plex password. If Plex later rejects the configured token, Plex Extended starts a Home Assistant reauthentication flow.
 
 ## Design
 
@@ -181,7 +192,7 @@ Plex Extended does **not** override or monkey-patch Home Assistant's built-in `p
 
 The intended split is:
 
-- **Home Assistant Plex:** media players, playback, server/client activity and the existing Plex media-source behavior.
+- **Home Assistant Plex:** media players, playback, server/client activity, and existing Plex media-source behavior.
 - **Plex Extended:** querying the library, metadata, recent additions, viewing state/history, and LLM/automation access.
 
 Both integrations can be configured against the same Plex account/server at the same time.
@@ -190,10 +201,6 @@ Both integrations can be configured against the same Plex account/server at the 
 
 Version `0.1.0` focuses on read/query functionality. It deliberately does not yet add playback control, destructive library operations, watch-state mutation, or Tautulli-specific analytics.
 
-## Development
+## Development and validation
 
-The repository validation workflow runs:
-
-- Python compilation checks
-- Home Assistant `hassfest`
-- HACS integration validation
+The repository validation workflow runs Python compilation and Home Assistant `hassfest` on every push and pull request. HACS validation is automatically enabled when the repository is public; the current HACS action cannot fetch private-repository manifests through its raw-content validation path.
