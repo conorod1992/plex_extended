@@ -161,17 +161,20 @@ response_variable: plex_progress
 The response includes:
 
 - overall status (`unwatched`, `in_progress`, `complete`, or `empty`)
-- total, watched, unwatched, and in-progress episode counts
-- completion percentage
+- total and fully watched episode counts
+- `unwatched_episodes` for episodes that have not been started
+- `in_progress_episodes` for started but unfinished episodes
+- `remaining_episodes` for all episodes that are not yet fully watched
+- completion percentage based on fully watched episodes
 - last fully watched episode
 - most recent episode activity
 - currently in-progress episode, where applicable
 - the next episode to watch
-- optional per-season watched/unwatched summaries
+- optional per-season progress summaries using the same distinct counts
 
 Season 0/specials are excluded by default so an unwatched special does not make an otherwise completed series appear unfinished. Set `include_specials: true` to include them in counts and completion.
 
-For the next episode, Plex Extended prefers Plex's own show-level On Deck result. If Plex has no On Deck result, it falls back to the first unplayed episode in canonical season/episode order. This also means a partially watched On Deck episode can correctly be returned as the episode to resume.
+For the next episode, Plex Extended prefers Plex's own show-level On Deck result. If Plex has no usable On Deck result, it falls back to the first unplayed episode in canonical season/episode order. Specials returned by On Deck are ignored when `include_specials` is false. This also means a partially watched On Deck episode can correctly be returned as the episode to resume.
 
 A title lookup prefers exact case-insensitive matches. If more than one exact show matches, Plex Extended refuses to guess and returns candidate rating keys; an optional `year` can resolve remakes or same-title shows. A known `rating_key` is therefore the preferred stable identifier when chaining from `search` or `query_library`.
 
