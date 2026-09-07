@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 
-from .active_streams import async_setup_active_streams_service
+from .active_streams_service import async_setup_active_streams_service
 from .client import (
     PlexExtendedAuthenticationError,
     PlexExtendedClient,
