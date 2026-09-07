@@ -24,15 +24,15 @@ from .const import (
     QUERY_SORT_FIELDS,
     QUERY_SORT_ORDERS,
     QUERY_WATCH_STATES,
+    RECENT_TV_GROUPINGS,
     SEARCH_TYPES,
 )
 from .library_query import async_query_library
+from .recent_media import async_recently_added, async_recently_watched
 from .user_context import (
     async_continue_watching_for_context,
     async_media_details_for_context,
     async_on_deck_for_context,
-    async_recently_added_for_context,
-    async_recently_watched_for_context,
     async_search_for_context,
 )
 from .viewing_progress import async_watch_status
@@ -46,6 +46,7 @@ LLM_TEXT_LIST = vol.All(
 LLM_YEAR = vol.All(vol.Coerce(int), vol.Range(min=0, max=9999))
 LLM_RATING = vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
 LLM_DURATION = vol.All(vol.Coerce(float), vol.Range(min=0))
+LLM_WINDOW_DAYS = vol.All(vol.Coerce(int), vol.Range(min=1, max=3650))
 
 
 class PlexTool(Tool):
@@ -75,6 +76,15 @@ class PlexTool(Tool):
         return {
             vol.Optional("user"): cv.string,
             vol.Optional("user_id"): cv.string,
+        }
+
+    @staticmethod
+    def _window_fields() -> dict[Any, Any]:
+        """Return recent-media time-window selectors."""
+        return {
+            vol.Optional("since"): cv.string,
+            vol.Optional("before"): cv.string,
+            vol.Optional("within_days"): LLM_WINDOW_DAYS,
         }
 
     def _client(self, data: dict[str, Any]) -> PlexExtendedClient:
@@ -255,9 +265,10 @@ class RecentlyAddedPlexTool(PlexTool):
 
     name = "plex_extended__recently_added"
     description = (
-        "Return recently added Plex items. Viewing-state fields use the configured default "
-        "Plex user unless user or user_id explicitly overrides it. Summaries are omitted "
-        "by default to keep responses compact."
+        "Return recently added Plex items, optionally bounded by since/before or "
+        "within_days. TV episode additions can be grouped by show or season to avoid "
+        "large episode-by-episode responses. Viewing-state fields use the configured "
+        "default Plex user unless user or user_id explicitly overrides it."
     )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
@@ -267,8 +278,12 @@ class RecentlyAddedPlexTool(PlexTool):
                 **self._server_fields(),
                 **self._library_fields(),
                 **self._user_fields(),
+                **self._window_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
                 vol.Optional("media_types"): LLM_TYPES,
+                vol.Optional("group_tv_by", default="none"): vol.In(
+                    RECENT_TV_GROUPINGS
+                ),
                 vol.Optional(
                     "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
                 ): cv.boolean,
@@ -281,9 +296,7 @@ class RecentlyAddedPlexTool(PlexTool):
     ) -> JsonObjectType:
         data = self.parameters(tool_input.tool_args)
         return await self._call(
-            async_recently_added_for_context(
-                self._client(data), self._criteria(data)
-            )
+            async_recently_added(self._client(data), self._criteria(data))
         )
 
 
@@ -292,9 +305,9 @@ class RecentlyWatchedPlexTool(PlexTool):
 
     name = "plex_extended__recently_watched"
     description = (
-        "Return recent Plex watch history, optionally filtered by library or media type. "
-        "The configured default Plex user is used when present; user or user_id can "
-        "explicitly override it."
+        "Return Plex watch history, optionally filtered by library, media type, and an "
+        "exact since/before or within_days time window. The configured default Plex user "
+        "is used when present; user or user_id can explicitly override it."
     )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
@@ -304,6 +317,7 @@ class RecentlyWatchedPlexTool(PlexTool):
                 **self._server_fields(),
                 **self._library_fields(),
                 **self._user_fields(),
+                **self._window_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
                 vol.Optional("media_types"): LLM_TYPES,
                 vol.Optional(
@@ -318,9 +332,7 @@ class RecentlyWatchedPlexTool(PlexTool):
     ) -> JsonObjectType:
         data = self.parameters(tool_input.tool_args)
         return await self._call(
-            async_recently_watched_for_context(
-                self._client(data), self._criteria(data)
-            )
+            async_recently_watched(self._client(data), self._criteria(data))
         )
 
 
@@ -521,11 +533,14 @@ def async_get_tools(
             "asks about a different Plex user. Use search for title/name lookup and "
             "query_library for structured media discovery or recommendations involving "
             "genres, people, years, watched state, runtime, quality, ratings, dates, or "
-            "sorting. Use watch_status for questions such as where the user is up to in a "
-            "TV show, whether it is complete, or which episode should be watched next. "
-            "Search/list results are intentionally compact and omit summaries by default; "
-            "call media_details for a selected item when detailed metadata or its summary "
-            "is needed. Results only include media actually present in the configured Plex "
-            "library."
+            "sorting. For recent-media questions, use within_days for relative windows "
+            "such as the last week, or since/before for explicit date ranges. For broad "
+            "recently-added TV questions, group_tv_by=show or season can avoid returning "
+            "many individual episodes from one import. Use watch_status for questions "
+            "such as where the user is up to in a TV show, whether it is complete, or "
+            "which episode should be watched next. Search/list results are intentionally "
+            "compact and omit summaries by default; call media_details for a selected item "
+            "when detailed metadata or its summary is needed. Results only include media "
+            "actually present in the configured Plex library."
         ),
     )

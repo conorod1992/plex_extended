@@ -131,34 +131,20 @@ def _recently_added_for_context(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return recent additions with selected-user watch/progress metadata."""
-    context = resolve_user_context(
-        client,
-        criteria.get("user"),
-        criteria.get("user_id"),
-    )
-    result = client._recently_added(
-        criteria.get("limit", DEFAULT_LIMIT),
-        criteria.get("library"),
-        criteria.get("media_types"),
-        bool(criteria.get("include_summary", True)),
-        criteria.get("library_id"),
-        context.server,
-    )
-    result.update(context.response_fields())
-    return result
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import _recently_added
+
+    return _recently_added(client, criteria)
 
 
 async def async_recently_added_for_context(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return recent additions using selected/default Plex user metadata."""
-    return await client._async_run(
-        _recently_added_for_context,
-        client,
-        dict(criteria),
-    )
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import async_recently_added
+
+    return await async_recently_added(client, criteria)
 
 
 def _media_details_for_context(
@@ -196,39 +182,20 @@ def _recently_watched_for_context(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
 ) -> dict[str, Any]:
-    """Apply default-user selection to the existing history backend."""
-    user, user_id = _effective_selectors(
-        client,
-        criteria.get("user"),
-        criteria.get("user_id"),
-    )
-    result = client._recently_watched(
-        criteria.get("limit", DEFAULT_LIMIT),
-        criteria.get("library"),
-        user,
-        criteria.get("media_types"),
-        bool(criteria.get("include_summary", True)),
-        criteria.get("library_id"),
-        user_id,
-    )
-    if user is not None or user_id is not None:
-        users = client._user_map()
-        account_id = client._resolve_user_id(users, user, user_id)
-        if account_id is not None:
-            result.update({"user_id": account_id, "user": users[account_id]})
-    return result
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import _recently_watched
+
+    return _recently_watched(client, criteria)
 
 
 async def async_recently_watched_for_context(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return history using explicit or configured-default user selection."""
-    return await client._async_run(
-        _recently_watched_for_context,
-        client,
-        dict(criteria),
-    )
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import async_recently_watched
+
+    return await async_recently_watched(client, criteria)
 
 
 def _browse_for_context(
