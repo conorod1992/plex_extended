@@ -689,7 +689,7 @@ mark_watched:
       name: Plex server
       selector:
         config_entry:
-integration: plex_extended
+          integration: plex_extended
     rating_key:
       name: Rating key
       description: Stable local Plex rating key returned by another Plex Extended action.
@@ -715,7 +715,7 @@ mark_unwatched:
       name: Plex server
       selector:
         config_entry:
-integration: plex_extended
+          integration: plex_extended
     rating_key:
       name: Rating key
       description: Stable local Plex rating key returned by another Plex Extended action.
