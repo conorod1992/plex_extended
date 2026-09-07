@@ -48,6 +48,7 @@ from .user_context import (
     async_search_for_context,
 )
 from .viewing_progress import async_watch_status
+from .watch_state import async_mark_unwatched, async_mark_watched
 
 LLM_LIMIT = vol.All(vol.Coerce(int), vol.Range(min=1, max=25))
 LLM_TYPES = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
@@ -449,6 +450,68 @@ class MediaDetailsPlexTool(PlexTool):
         )
 
 
+class MarkWatchedPlexTool(PlexTool):
+    """Mark one local Plex item watched."""
+
+    name = "plex_extended__mark_watched"
+    description = (
+        "SIDE EFFECT: mark one exact local Plex item watched for the configured/default "
+        "Plex user. Use only when the user explicitly asks to change watch state. A "
+        "rating_key from a prior Plex Extended local-library tool is required; never infer "
+        "a rating_key from a title. Marking a show or season also affects its child episodes."
+    )
+
+    def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
+        super().__init__(clients)
+        self.parameters = vol.Schema(
+            {
+                **self._server_fields(),
+                **self._user_fields(),
+                vol.Required("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+            }
+        )
+
+    @override
+    async def async_call(
+        self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
+    ) -> JsonObjectType:
+        data = self.parameters(tool_input.tool_args)
+        return await self._call(
+            async_mark_watched(self._client(data), self._criteria(data))
+        )
+
+
+class MarkUnwatchedPlexTool(PlexTool):
+    """Mark one local Plex item unwatched."""
+
+    name = "plex_extended__mark_unwatched"
+    description = (
+        "SIDE EFFECT: mark one exact local Plex item unwatched for the configured/default "
+        "Plex user. Use only when the user explicitly asks to change watch state. A "
+        "rating_key from a prior Plex Extended local-library tool is required; never infer "
+        "a rating_key from a title. Marking a show or season also affects its child episodes."
+    )
+
+    def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
+        super().__init__(clients)
+        self.parameters = vol.Schema(
+            {
+                **self._server_fields(),
+                **self._user_fields(),
+                vol.Required("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+            }
+        )
+
+    @override
+    async def async_call(
+        self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
+    ) -> JsonObjectType:
+        data = self.parameters(tool_input.tool_args)
+        return await self._call(
+            async_mark_unwatched(self._client(data), self._criteria(data))
+        )
+
+
 class ListCollectionsPlexTool(PlexTool):
     """List Plex collections."""
 
@@ -713,6 +776,8 @@ def async_get_tools(
             ContinueWatchingPlexTool(clients),
             OnDeckPlexTool(clients),
             MediaDetailsPlexTool(clients),
+            MarkWatchedPlexTool(clients),
+            MarkUnwatchedPlexTool(clients),
             ListCollectionsPlexTool(clients),
             CollectionItemsPlexTool(clients),
             ListPlaylistsPlexTool(clients),
@@ -739,8 +804,12 @@ def async_get_tools(
             "explicit ranges. For broad recently-added TV questions, group_tv_by=show or "
             "season can avoid returning many individual episodes. Use watch_status for "
             "questions such as where the user is up to in a TV show, whether it is "
-            "complete, or which episode should be watched next. Search/list results are "
-            "intentionally compact and omit summaries by default; call media_details for "
-            "a selected local item when detailed metadata or its summary is needed."
+            "complete, or which episode should be watched next. mark_watched and "
+            "mark_unwatched change Plex data: use them only when the user explicitly asks "
+            "to change watch state, first resolve an exact local rating_key with a read "
+            "tool, and never invent a rating_key. A show/season mutation also affects its "
+            "child episodes. Search/list results are intentionally compact and omit "
+            "summaries by default; call media_details for a selected local item when "
+            "detailed metadata or its summary is needed."
         ),
     )
