@@ -681,6 +681,58 @@ media_details:
       selector:
         boolean:
 
+mark_watched:
+  name: Mark watched
+  description: Mark one exact local Plex item watched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+integration: plex_extended
+    rating_key:
+      name: Rating key
+      description: Stable local Plex rating key returned by another Plex Extended action.
+      required: true
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for this change.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default user for this change.
+      selector:
+        text:
+
+mark_unwatched:
+  name: Mark unwatched
+  description: Mark one exact local Plex item unwatched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+integration: plex_extended
+    rating_key:
+      name: Rating key
+      description: Stable local Plex rating key returned by another Plex Extended action.
+      required: true
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for this change.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default user for this change.
+      selector:
+        text:
+
 list_collections:
   name: List collections
   description: List Plex collections visible to the selected/default Plex user and return stable collection rating keys.

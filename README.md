@@ -20,6 +20,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Supports a configurable **default Plex user** for personalized viewing state, with per-query overrides.
 - Supports multiple Plex servers.
 - Supports stable Plex library/user/collection/playlist rating keys as well as convenient names.
+- Provides explicit watched/unwatched update actions; Assist write tools are opt-in and disabled by default.
 - Never returns Plex tokens, tokenized URLs, or local media file paths in action/tool results.
 - Provides privacy-safe Home Assistant diagnostics.
 
@@ -40,7 +41,7 @@ The integration uses the same `PlexAPI` and `plexauth` dependency versions as th
 
 ## Plex user context
 
-Viewing state in Plex is user-specific. Plex Extended can therefore use a selected Plex user's state consistently wherever returned data depends on viewing state, including watched/unwatched filtering, search/detail metadata, recently added metadata, TV progress, Continue Watching, On Deck, collections/playlists, and watch history.
+Viewing state in Plex is user-specific. Plex Extended can therefore use a selected Plex user's state consistently wherever returned data depends on viewing state, including watched/unwatched filtering, search/detail metadata, recently added metadata, TV progress, Continue Watching, On Deck, collections/playlists, watch history, and explicit watch-state updates.
 
 Open **Settings → Devices & services → Plex Extended → Configure** to choose a **Default Plex user**. If no default user is selected, Plex Extended uses the configured server/account context.
 
@@ -54,6 +55,7 @@ The following capabilities use the configured default Plex user:
 - `plex_extended.continue_watching`
 - `plex_extended.on_deck`
 - `plex_extended.media_details` for returned watched/progress metadata
+- `plex_extended.mark_watched` / `plex_extended.mark_unwatched` for explicit viewing-state changes
 - `plex_extended.list_collections` / `plex_extended.collection_items`
 - `plex_extended.list_playlists` / `plex_extended.playlist_items`
 - the equivalent native LLM tools
@@ -198,6 +200,20 @@ response_variable: plex_item
 
 Technical metadata can include container, bitrate, resolution, codecs, dimensions, frame rate, and audio channels. Local filesystem paths are deliberately not exposed.
 
+### `plex_extended.mark_watched` / `plex_extended.mark_unwatched`
+
+Explicitly change one local Plex item's viewing state for the selected/default Plex user. These are side-effecting actions and therefore require an exact local `rating_key`; they deliberately do not accept a title lookup.
+
+```yaml
+action: plex_extended.mark_watched
+data:
+  rating_key: "1234"
+response_variable: plex_update
+```
+
+Plex Extended refetches the item after the write and returns an error if Plex does not confirm the requested state. The response includes the previous and current watched state plus the effective Plex user. For shows and seasons, Plex applies the state to child episodes as well; the response reports `scope: item_and_children` so that cascade is explicit.
+
+The manual Home Assistant actions are always available. Native Assist write tools are a separate opt-in controlled by **Settings → Devices & services → Plex Extended → Configure → Allow Assist to change Plex watch state**.
 ### `plex_extended.list_collections`
 
 Lists collections visible in the selected/default Plex user context and returns stable collection rating keys. Optional filters include library, collection media type, and partial title.
@@ -293,6 +309,8 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 - `plex_extended__continue_watching`
 - `plex_extended__on_deck`
 - `plex_extended__media_details`
+- `plex_extended__mark_watched` *(only when Assist write access is enabled)*
+- `plex_extended__mark_unwatched` *(only when Assist write access is enabled)*
 - `plex_extended__list_collections`
 - `plex_extended__collection_items`
 - `plex_extended__list_playlists`
@@ -314,8 +332,11 @@ A compatible conversation integration can therefore answer questions such as:
 - "Which things on my Plex Watchlist are already on my server?"
 - "Give me my Continue Watching list."
 - "Where is Guest up to in that show?"
+- "Mark that episode as watched."
 
 The LLM guidance distinguishes fuzzy search, structured library querying, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval and understands that Watchlist is not affected by the configured household-user default.
+
+Watch-state mutation tools are **not exposed to Assist by default**. When explicitly enabled in the integration options, the model is instructed to use them only for an explicit user request, resolve an exact local `rating_key` with a read tool first, and never invent an identifier. In multi-server setups, write tools expose only the server entries on which this option is enabled.
 
 LLM search/list/query tools omit summaries by default to keep broad results token-efficient. LLM result limits are capped at 25; regular Home Assistant actions allow up to 50 and continue to include summaries by default for backwards compatibility.
 
@@ -361,13 +382,13 @@ This prevents action and LLM behavior from drifting apart. User-scoped server co
 Plex Extended does **not** override or monkey-patch Home Assistant's built-in `plex` integration.
 
 - **Home Assistant Plex:** media players, playback, server/client activity, and existing Plex media-source behavior.
-- **Plex Extended:** querying the library, metadata, recent additions, collections/playlists/Watchlist, per-user viewing state/history/progress, and LLM/automation access.
+- **Plex Extended:** querying the library, metadata, recent additions, collections/playlists/Watchlist, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.
 
 Both integrations can be configured against the same Plex account/server at the same time.
 
 ## v1 scope
 
-Version `0.1.0` focuses on read/query functionality. It deliberately does not yet add playback control, destructive library operations, watch-state mutation, or Tautulli-specific analytics.
+Version `0.1.0` focuses on query functionality plus narrowly scoped, explicit watched/unwatched updates. It deliberately does not add playback control, broader destructive library operations, or Tautulli-specific analytics.
 
 ## Development and validation
 
