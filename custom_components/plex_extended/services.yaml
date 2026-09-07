@@ -406,7 +406,7 @@ watch_status:
 
 recently_added:
   name: Recently added
-  description: Return recently added Plex media with watch/progress fields evaluated for the selected/default Plex user.
+  description: Return recently added Plex media with optional time windows and TV episode grouping.
   fields:
     config_entry_id:
       name: Plex server
@@ -441,6 +441,24 @@ recently_added:
       description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
+    since:
+      name: Since
+      description: Inclusive start of the time window. Use an ISO date or datetime; date-only values use Home Assistant's timezone.
+      selector:
+        text:
+    before:
+      name: Before
+      description: Exclusive end of the time window. Use an ISO date or datetime; date-only values use Home Assistant's timezone.
+      selector:
+        text:
+    within_days:
+      name: Within days
+      description: Return items from the trailing number of days. Cannot be combined with Since or Before.
+      selector:
+        number:
+          min: 1
+          max: 3650
+          mode: box
     media_types:
       name: Media types
       selector:
@@ -455,6 +473,16 @@ recently_added:
             - album
             - track
             - collection
+    group_tv_by:
+      name: Group TV episodes
+      description: Collapse recently added TV episodes by show or season. None preserves the normal individual-item behavior.
+      default: none
+      selector:
+        select:
+          options:
+            - none
+            - show
+            - season
     include_summary:
       name: Include summary
       default: true
@@ -463,7 +491,7 @@ recently_added:
 
 recently_watched:
   name: Recently watched
-  description: Return Plex play history, optionally filtered by Plex user, library or media type.
+  description: Return Plex play history, optionally bounded by a time window and filtered by Plex user, library or media type.
   fields:
     config_entry_id:
       name: Plex server
@@ -498,6 +526,24 @@ recently_watched:
       description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
+    since:
+      name: Since
+      description: Inclusive start of the time window. Use an ISO date or datetime; date-only values use Home Assistant's timezone.
+      selector:
+        text:
+    before:
+      name: Before
+      description: Exclusive end of the time window. Use an ISO date or datetime; date-only values use Home Assistant's timezone.
+      selector:
+        text:
+    within_days:
+      name: Within days
+      description: Return history from the trailing number of days. Cannot be combined with Since or Before.
+      selector:
+        number:
+          min: 1
+          max: 3650
+          mode: box
     media_types:
       name: Media types
       selector:
