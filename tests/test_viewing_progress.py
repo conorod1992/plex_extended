@@ -185,7 +185,7 @@ def _client(server: FakeServer) -> PlexExtendedClient:
 
 
 def test_watch_status_reports_current_and_next_episode() -> None:
-    """Partially watched shows expose counts and Plex's On Deck episode."""
+    """Partially watched shows expose distinct state counts and Plex On Deck."""
     ep1 = _episode(
         1,
         1,
@@ -210,13 +210,17 @@ def test_watch_status_reports_current_and_next_episode() -> None:
 
     assert result["status"] == "in_progress"
     assert result["watched_episodes"] == 1
-    assert result["unwatched_episodes"] == 2
+    assert result["unwatched_episodes"] == 1
     assert result["in_progress_episodes"] == 1
+    assert result["remaining_episodes"] == 2
     assert result["completion_percent"] == 33.3
     assert result["last_watched_episode"]["season_episode"] == "S01E01"
     assert result["last_activity_episode"]["season_episode"] == "S01E02"
     assert result["in_progress_episode"]["progress_percent"] == 50.0
     assert result["next_episode"]["season_episode"] == "S01E02"
+    assert result["seasons"][0]["unwatched_episodes"] == 1
+    assert result["seasons"][0]["in_progress_episodes"] == 1
+    assert result["seasons"][0]["remaining_episodes"] == 2
     assert result["seasons"][0]["complete"] is False
 
 
@@ -233,6 +237,7 @@ def test_complete_show_has_no_next_episode() -> None:
 
     assert result["status"] == "complete"
     assert result["complete"] is True
+    assert result["remaining_episodes"] == 0
     assert result["completion_percent"] == 100.0
     assert result["next_episode"] is None
 
@@ -259,6 +264,28 @@ def test_specials_are_excluded_by_default() -> None:
     assert included["complete"] is False
     assert included["total_episodes"] == 2
     assert included["next_episode"]["season_episode"] == "S00E01"
+
+
+def test_excluded_special_cannot_leak_back_through_on_deck() -> None:
+    """An On Deck special must be ignored when specials are excluded."""
+    special = _episode(0, 1, "Holiday Special")
+    watched = _episode(1, 1, "Pilot", watched=True)
+    regular_next = _episode(1, 2, "Second Episode")
+    show = FakeShow(
+        "Special Show",
+        "31",
+        [special, watched, regular_next],
+        on_deck=special,
+    )
+
+    result = _watch_status(
+        _client(FakeServer([show])),
+        {"rating_key": "31", "include_summary": False},
+    )
+
+    assert result["complete"] is False
+    assert result["total_episodes"] == 2
+    assert result["next_episode"]["season_episode"] == "S01E02"
 
 
 def test_title_resolution_prefers_exact_match_and_year() -> None:
@@ -309,3 +336,11 @@ def test_rating_key_must_refer_to_show() -> None:
             library=None,
             library_id=None,
         )
+
+
+def test_watch_status_requires_title_or_rating_key() -> None:
+    """A progress query without a show identifier should fail clearly."""
+    client = _client(FakeServer([]))
+
+    with pytest.raises(PlexExtendedError, match="Provide either rating_key or title"):
+        _watch_status(client, {"include_summary": False})
