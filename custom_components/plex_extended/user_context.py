@@ -127,6 +127,26 @@ async def async_search_for_context(
     return await client._async_run(_search_for_context, client, dict(criteria))
 
 
+def _recently_added_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import _recently_added
+
+    return _recently_added(client, criteria)
+
+
+async def async_recently_added_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import async_recently_added
+
+    return await async_recently_added(client, criteria)
+
+
 def _media_details_for_context(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
@@ -156,6 +176,26 @@ async def async_media_details_for_context(
         client,
         dict(criteria),
     )
+
+
+def _recently_watched_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import _recently_watched
+
+    return _recently_watched(client, criteria)
+
+
+async def async_recently_watched_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Compatibility shim for the canonical recent-media backend."""
+    from .recent_media import async_recently_watched
+
+    return await async_recently_watched(client, criteria)
 
 
 def _browse_for_context(
