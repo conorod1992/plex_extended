@@ -27,6 +27,7 @@ from .const import (
     SEARCH_TYPES,
 )
 from .library_query import async_query_library
+from .viewing_progress import async_watch_status
 
 LLM_LIMIT = vol.All(vol.Coerce(int), vol.Range(min=1, max=25))
 LLM_TYPES = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
@@ -188,6 +189,44 @@ class QueryLibraryPlexTool(PlexTool):
         criteria.pop("server", None)
         criteria["include_technical"] = False
         return await self._call(async_query_library(client, criteria))
+
+
+class WatchStatusPlexTool(PlexTool):
+    """Return episode-level viewing progress for one TV show."""
+
+    name = "plex_extended__watch_status"
+    description = (
+        "Get TV-show viewing progress: completion, watched/unwatched episode counts, "
+        "the last watched/current episode, and the next episode to watch. Use a known "
+        "show rating_key when available; title and optional year can also resolve a show."
+    )
+
+    def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
+        super().__init__(clients)
+        self.parameters = vol.Schema(
+            {
+                **self._server_fields(),
+                **self._library_fields(),
+                vol.Optional("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+                vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+                vol.Optional("year"): LLM_YEAR,
+                vol.Optional("include_specials", default=False): cv.boolean,
+                vol.Optional("include_seasons", default=False): cv.boolean,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
+            }
+        )
+
+    @override
+    async def async_call(
+        self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
+    ) -> JsonObjectType:
+        data = self.parameters(tool_input.tool_args)
+        client = self._client(data)
+        criteria = dict(data)
+        criteria.pop("server", None)
+        return await self._call(async_watch_status(client, criteria))
 
 
 class RecentlyAddedPlexTool(PlexTool):
@@ -450,6 +489,7 @@ def async_get_tools(
         tools=[
             SearchPlexTool(clients),
             QueryLibraryPlexTool(clients),
+            WatchStatusPlexTool(clients),
             RecentlyAddedPlexTool(clients),
             RecentlyWatchedPlexTool(clients),
             ContinueWatchingPlexTool(clients),
@@ -460,13 +500,15 @@ def async_get_tools(
         ],
         prompt=(
             "Use Plex Extended tools for questions about the user's Plex library, "
-            "watch history, recently added media, Continue Watching, or On Deck. "
-            "Use search for title/name lookup and query_library for structured media "
-            "discovery or recommendations involving genres, people, years, watched "
-            "state, runtime, quality, ratings, dates, or sorting. Search/list results "
-            "are intentionally compact and omit summaries by default; call "
-            "media_details for a selected item when detailed metadata or its summary "
-            "is needed. Results only include media actually present in the configured "
-            "Plex library."
+            "watch history, recently added media, Continue Watching, On Deck, or TV "
+            "viewing progress. Use search for title/name lookup and query_library for "
+            "structured media discovery or recommendations involving genres, people, "
+            "years, watched state, runtime, quality, ratings, dates, or sorting. Use "
+            "watch_status for questions such as where the user is up to in a TV show, "
+            "whether it is complete, or which episode should be watched next. Search/list "
+            "results are intentionally compact and omit summaries by default; call "
+            "media_details for a selected item when detailed metadata or its summary is "
+            "needed. Results only include media actually present in the configured Plex "
+            "library."
         ),
     )
