@@ -61,6 +61,16 @@ QUERY_SORT_FIELDS: Final = (
     "resolution",
 )
 QUERY_SORT_ORDERS: Final = ("asc", "desc")
+COLLECTION_MEDIA_TYPES: Final = ("movie", "show", "artist", "album")
+PLAYLIST_TYPES: Final = ("audio", "video", "photo")
+WATCHLIST_FILTERS: Final = ("all", "available", "released")
+WATCHLIST_MEDIA_TYPES: Final = ("movie", "show")
+WATCHLIST_SORT_FIELDS: Final = (
+    "watchlisted_at",
+    "title",
+    "release_date",
+    "critic_rating",
+)
 
 SERVICE_SEARCH: Final = "search"
 SERVICE_QUERY_LIBRARY: Final = "query_library"
@@ -70,6 +80,11 @@ SERVICE_RECENTLY_WATCHED: Final = "recently_watched"
 SERVICE_CONTINUE_WATCHING: Final = "continue_watching"
 SERVICE_ON_DECK: Final = "on_deck"
 SERVICE_MEDIA_DETAILS: Final = "media_details"
+SERVICE_LIST_COLLECTIONS: Final = "list_collections"
+SERVICE_COLLECTION_ITEMS: Final = "collection_items"
+SERVICE_LIST_PLAYLISTS: Final = "list_playlists"
+SERVICE_PLAYLIST_ITEMS: Final = "playlist_items"
+SERVICE_WATCHLIST: Final = "watchlist"
 SERVICE_LIST_LIBRARIES: Final = "list_libraries"
 SERVICE_LIST_USERS: Final = "list_users"
 SERVICE_TEST_CONNECTION: Final = "test_connection"
