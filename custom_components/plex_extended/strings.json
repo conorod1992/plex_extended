@@ -1,0 +1,51 @@
+{
+  "title": "Plex Extended",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Plex Extended",
+        "description": "Connect Plex Extended to a Plex Media Server.",
+        "menu_options": {
+          "website_auth": "Connect with Plex",
+          "manual_setup": "Enter server URL and token manually"
+        }
+      },
+      "manual_setup": {
+        "title": "Manual Plex setup",
+        "description": "Use this fallback only if Plex website authorization is not suitable.",
+        "data": {
+          "base_url": "Plex server URL",
+          "token": "Plex token"
+        }
+      },
+      "select_server": {
+        "title": "Select Plex server",
+        "description": "Choose the Plex Media Server to add.",
+        "data": {
+          "machine_identifier": "Plex server"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Plex",
+        "description": "Plex Extended can no longer authenticate. Continue to reconnect this server with Plex."
+      }
+    },
+    "error": {
+      "invalid_auth": "Plex rejected the supplied authorization.",
+      "cannot_connect": "Unable to connect to Plex."
+    },
+    "abort": {
+      "already_configured": "This Plex server is already configured.",
+      "auth_not_started": "The Plex authorization flow was not available.",
+      "cannot_connect": "Unable to connect to Plex or the selected Plex server.",
+      "invalid_auth": "Plex rejected the authorization.",
+      "missing_frontend_url": "Home Assistant could not determine the frontend URL needed for Plex authorization.",
+      "missing_request": "Plex authorization must be started from the Home Assistant frontend.",
+      "no_servers": "No Plex Media Servers were found for this Plex account.",
+      "reauth_entry_missing": "The Plex Extended entry that requested reauthentication no longer exists.",
+      "reauth_server_missing": "The previously configured Plex server is no longer available to this Plex account.",
+      "reauth_successful": "Plex Extended was reconnected successfully.",
+      "token_request_timeout": "Plex authorization timed out. Please try again."
+    }
+  }
+}
