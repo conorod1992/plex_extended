@@ -44,3 +44,12 @@ def test_services_yaml_exposes_both_mutation_actions_with_valid_selectors() -> N
     assert "\nmark_unwatched:\n" in source
     assert source.count("Stable local Plex rating key returned by another Plex Extended action.") == 2
     assert "config_entry:\nintegration: plex_extended" not in source
+    assert source.count("        config_entry:\n          integration: plex_extended") >= 2
+
+
+def test_no_temporary_patch_workflows_remain() -> None:
+    """One-off branch patch helpers must not become part of the PR."""
+    workflows = ROOT / ".github" / "workflows"
+
+    assert not (workflows / "pr9-doc-patch.yml").exists()
+    assert not (workflows / "pr9-yaml-fix.yml").exists()
