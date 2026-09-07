@@ -309,10 +309,49 @@ class PlexExtendedAuthorizationCallbackView(HomeAssistantView):
 
         await hass.config_entries.flow.async_configure(flow_id=flow_id, user_input=None)
         return web_response.Response(
-            text=(
-                "<html><body><h1>Plex Extended connected</h1>"
-                "<p>You can close this window and return to Home Assistant.</p>"
-                "</body></html>"
-            ),
+            text="""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plex Extended connected</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: Canvas;
+      color: CanvasText;
+    }
+    main { max-width: 34rem; padding: 2rem; text-align: center; }
+    h1 { margin-bottom: .5rem; font-size: 1.6rem; }
+    p { line-height: 1.5; opacity: .8; }
+    a {
+      display: inline-block;
+      margin-top: .75rem;
+      padding: .7rem 1rem;
+      border-radius: .5rem;
+      background: #03a9f4;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Plex Extended connected</h1>
+    <p>Returning to Home Assistant…</p>
+    <p>If this window does not close automatically, use the button below.</p>
+    <a href="/">Return to Home Assistant</a>
+  </main>
+  <script>window.close();</script>
+</body>
+</html>
+""",
             content_type="text/html",
+            headers={"Cache-Control": "no-store"},
         )
