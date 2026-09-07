@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.typing import ConfigType
 
+from .active_streams import async_setup_active_streams_service
 from .client import (
     PlexExtendedAuthenticationError,
     PlexExtendedClient,
@@ -20,6 +21,7 @@ PlexExtendedConfigEntry = ConfigEntry[PlexExtendedClient]
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Plex Extended and register its actions."""
     await async_setup_services(hass)
+    await async_setup_active_streams_service(hass)
     return True
 
 
