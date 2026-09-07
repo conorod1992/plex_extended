@@ -9,12 +9,7 @@ from plexapi.exceptions import Unauthorized
 from plexapi.server import PlexServer
 
 from .client import PlexExtendedClient, PlexExtendedError
-from .const import (
-    CONF_DEFAULT_USER_ID,
-    DEFAULT_LIMIT,
-    DEFAULT_SEARCH_TYPES,
-    MAX_LIMIT,
-)
+from .const import CONF_DEFAULT_USER_ID, DEFAULT_LIMIT
 
 
 @dataclass(slots=True)
@@ -100,44 +95,6 @@ def resolve_user_context(
     return PlexUserContext(server, account_id, name, users)
 
 
-def resolve_section(
-    client: PlexExtendedClient,
-    server: PlexServer,
-    library: str | None = None,
-    library_id: str | int | None = None,
-) -> Any | None:
-    """Resolve a library against a specific user's Plex server view."""
-    if not library and library_id is None:
-        return None
-
-    sections = server.library.sections()
-
-    if library_id is not None:
-        wanted_id = str(library_id)
-        matches = [section for section in sections if str(section.key) == wanted_id]
-        if not matches:
-            raise PlexExtendedError(f"Plex library ID not found: {library_id}")
-        section = matches[0]
-        if library and section.title.casefold() != library.casefold():
-            raise PlexExtendedError(
-                f"Plex library ID {library_id} is '{section.title}', not '{library}'"
-            )
-        return section
-
-    assert library is not None
-    wanted = library.casefold()
-    matches = [section for section in sections if section.title.casefold() == wanted]
-    if not matches:
-        raise PlexExtendedError(f"Plex library not found: {library}")
-    if len(matches) > 1:
-        ids = ", ".join(str(section.key) for section in matches)
-        raise PlexExtendedError(
-            f"Multiple Plex libraries are named '{library}'. Use library_id instead "
-            f"(matching IDs: {ids})"
-        )
-    return matches[0]
-
-
 def _search_for_context(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
@@ -148,68 +105,16 @@ def _search_for_context(
         criteria.get("user"),
         criteria.get("user_id"),
     )
-    section = resolve_section(
-        client,
-        context.server,
-        criteria.get("library"),
-        criteria.get("library_id"),
-    )
-    section_id = section.key if section else None
-    media_types = client._normalize_types(
-        criteria.get("search_types") or DEFAULT_SEARCH_TYPES
-    )
-    requested_types = set(media_types)
-    max_results = client._normalize_limit(criteria.get("limit", DEFAULT_LIMIT))
-    mediatype = media_types[0] if len(media_types) == 1 else None
-
-    matches = context.server.search(
+    result = client._search(
         criteria["query"],
-        mediatype=mediatype,
-        limit=max_results,
-        sectionId=section_id,
+        criteria.get("search_types"),
+        criteria.get("limit", DEFAULT_LIMIT),
+        criteria.get("library"),
+        bool(criteria.get("include_summary", True)),
+        bool(criteria.get("include_technical", False)),
+        criteria.get("library_id"),
+        context.server,
     )
-
-    results: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
-    include_summary = bool(criteria.get("include_summary", True))
-    include_technical = bool(criteria.get("include_technical", False))
-    for match in matches:
-        match_type = str(getattr(match, "type", ""))
-        if match_type not in requested_types:
-            continue
-        match_library_id = getattr(match, "librarySectionID", None)
-        rating_key = getattr(match, "ratingKey", None)
-        if match_library_id is None or rating_key is None:
-            continue
-        if section_id is not None and str(match_library_id) != str(section_id):
-            continue
-
-        identity = (match_type, str(rating_key))
-        if identity in seen:
-            continue
-        seen.add(identity)
-
-        if include_technical:
-            try:
-                match = context.server.fetchItem(rating_key)
-            except Exception:
-                pass
-        results.append(
-            client._serialize_item(
-                match,
-                include_summary=include_summary,
-                include_technical=include_technical,
-            )
-        )
-        if len(results) >= max_results:
-            break
-
-    result: dict[str, Any] = {
-        "success": True,
-        "query": criteria["query"],
-        "count": len(results),
-        "results": results,
-    }
     result.update(context.response_fields())
     return result
 
@@ -232,33 +137,14 @@ def _recently_added_for_context(
         criteria.get("user"),
         criteria.get("user_id"),
     )
-    max_results = client._normalize_limit(criteria.get("limit", DEFAULT_LIMIT))
-    types = set(criteria.get("media_types") or [])
-    section = resolve_section(
-        client,
-        context.server,
+    result = client._recently_added(
+        criteria.get("limit", DEFAULT_LIMIT),
         criteria.get("library"),
+        criteria.get("media_types"),
+        bool(criteria.get("include_summary", True)),
         criteria.get("library_id"),
+        context.server,
     )
-    if section:
-        items = section.recentlyAdded(maxresults=MAX_LIMIT)
-    else:
-        items = context.server.library.recentlyAdded()
-    if types:
-        items = [item for item in items if getattr(item, "type", None) in types]
-    items = list(items)[:max_results]
-
-    result: dict[str, Any] = {
-        "success": True,
-        "count": len(items),
-        "results": [
-            client._serialize_item(
-                item,
-                include_summary=bool(criteria.get("include_summary", True)),
-            )
-            for item in items
-        ],
-    }
     result.update(context.response_fields())
     return result
 
@@ -285,15 +171,11 @@ def _media_details_for_context(
         criteria.get("user"),
         criteria.get("user_id"),
     )
-    item = context.server.fetchItem(criteria["rating_key"])
-    result: dict[str, Any] = {
-        "success": True,
-        "result": client._serialize_item(
-            item,
-            include_summary=True,
-            include_technical=bool(criteria.get("include_technical", True)),
-        ),
-    }
+    result = client._media_details(
+        criteria["rating_key"],
+        bool(criteria.get("include_technical", True)),
+        context.server,
+    )
     result.update(context.response_fields())
     return result
 
@@ -361,35 +243,22 @@ def _browse_for_context(
         criteria.get("user"),
         criteria.get("user_id"),
     )
-    max_results = client._normalize_limit(criteria.get("limit", DEFAULT_LIMIT))
-    section = resolve_section(
-        client,
-        context.server,
-        criteria.get("library"),
-        criteria.get("library_id"),
-    )
-
     if on_deck:
-        items = section.onDeck() if section else context.server.library.onDeck()
-    else:
-        items = (
-            section.continueWatching()
-            if section
-            else context.server.continueWatching()
+        result = client._on_deck(
+            criteria.get("limit", DEFAULT_LIMIT),
+            criteria.get("library"),
+            bool(criteria.get("include_summary", True)),
+            criteria.get("library_id"),
+            context.server,
         )
-
-    items = list(items)[:max_results]
-    result: dict[str, Any] = {
-        "success": True,
-        "count": len(items),
-        "results": [
-            client._serialize_item(
-                item,
-                include_summary=bool(criteria.get("include_summary", True)),
-            )
-            for item in items
-        ],
-    }
+    else:
+        result = client._continue_watching(
+            criteria.get("limit", DEFAULT_LIMIT),
+            criteria.get("library"),
+            bool(criteria.get("include_summary", True)),
+            criteria.get("library_id"),
+            context.server,
+        )
     result.update(context.response_fields())
     return result
 
@@ -426,8 +295,6 @@ def _validate_user_context(
 ) -> dict[str, Any]:
     """Validate that Plex can operate as a selected user."""
     context = resolve_user_context(client, user_id=user_id)
-    # Force one lightweight user-scoped library read so a bad switched token or
-    # unavailable user fails while saving options rather than during a later query.
     context.server.library.sections()
     return {"user_id": context.user_id, "user": context.user}
 
