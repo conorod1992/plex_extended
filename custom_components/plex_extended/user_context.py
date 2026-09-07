@@ -55,10 +55,12 @@ def resolve_user_context(
 ) -> PlexUserContext:
     """Resolve a Plex server operating as the requested/default user."""
     base_server = client._require_server()
-    users = client._user_map()
     user, user_id = _effective_selectors(client, user, user_id)
-    account_id = client._resolve_user_id(users, user, user_id)
+    if user is None and user_id is None:
+        return PlexUserContext(base_server, None, None, {})
 
+    users = client._user_map()
+    account_id = client._resolve_user_id(users, user, user_id)
     if account_id is None:
         return PlexUserContext(base_server, None, None, users)
 
