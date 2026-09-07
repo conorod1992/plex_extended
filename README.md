@@ -14,6 +14,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.
 - Supports fuzzy title search and typed advanced library filtering.
 - Exposes episode-level TV progress, last watched/current episode, and the next episode to watch.
+- Supports bounded recent-media queries and optional TV show/season grouping for large imports.
 - Supports a configurable **default Plex user** for personalized viewing state, with per-query overrides.
 - Supports multiple Plex servers.
 - Supports stable Plex library/user IDs as well as convenient names.
@@ -231,17 +232,61 @@ A title lookup prefers exact case-insensitive matches. If more than one exact sh
 
 ### `plex_extended.recently_added`
 
-Returns recently added media. Supports `limit`, `library`, `library_id`, `media_types`, `user`, `user_id`, and `include_summary`. The selected/default Plex user determines any watched/progress metadata returned for those additions; the ordering and definition of "recently added" remain library-wide.
+Returns recently added media. In addition to `limit`, library, media type and user selectors, it supports exact time windows and optional TV episode grouping.
+
+Use either `within_days` for a trailing relative window or `since` / `before` for an explicit window. `since` is inclusive and `before` is exclusive. ISO dates and datetimes are accepted; date-only and timezone-less values are interpreted in Home Assistant's configured timezone. `within_days` cannot be combined with `since` or `before`.
+
+```yaml
+action: plex_extended.recently_added
+data:
+  within_days: 7
+  group_tv_by: show
+  limit: 10
+response_variable: plex_recent
+```
+
+`group_tv_by` can be `none`, `show`, or `season`. The default is `none`, which preserves the existing individual-item behavior. `show` and `season` collapse recently added TV episodes so a large season import does not consume the whole response. A grouped result includes the number of episodes added, watched/remaining counts for the selected Plex user, the affected seasons, first/newest addition timestamps, and the newest episode in the group.
+
+For example, three newly imported episodes can be represented as one compact group:
+
+```yaml
+count: 1
+media_item_count: 3
+group_tv_by: show
+results:
+  - type: show_addition_group
+    title: Resident Alien
+    episodes_added: 3
+    watched_episodes: 1
+    remaining_episodes: 2
+    seasons:
+      - 1
+      - 2
+    newest_added_at: "2026-09-07T20:00:00+00:00"
+```
+
+The selected/default Plex user determines watched/progress metadata; the underlying added date itself remains library-wide. When none of the new window/grouping controls are supplied, Plex Extended deliberately uses the same recently-added path as before this feature.
 
 ### `plex_extended.recently_watched`
 
-Returns Plex play history sorted newest first. Supports filtering by Plex user name/ID, library name/ID, media type, and result limit.
+Returns Plex play history sorted newest first. It supports filtering by Plex user name/ID, library name/ID, media type and result limit, plus the same `since`, `before`, and `within_days` time-window controls as `recently_added`.
+
+```yaml
+action: plex_extended.recently_watched
+data:
+  since: "2026-09-01"
+  before: "2026-09-08"
+  media_types:
+    - movie
+  limit: 20
+response_variable: plex_history
+```
+
+`since` is inclusive and `before` is exclusive. Plex Extended uses Plex's history lower-bound query where available and enforces the upper boundary while paging, so a bounded, media-type-filtered request continues through history until it fills the requested result count, reaches the beginning of the requested window, or exhausts history.
 
 If neither `user` nor `user_id` is supplied, Plex Extended applies the configured default Plex user when one exists. If no default is configured, history visible to the configured server token is returned, preserving the original behavior. An explicit user overrides the configured default for the individual call.
 
-Filtered history is paged until Plex Extended has filled the requested result count or Plex history is exhausted. For example, asking for 10 movies will not stop early merely because the newest history pages are dominated by TV episodes.
-
-`user_id` is the stable Plex account ID returned by `plex_extended.list_users`. As with libraries, names are supported for convenience but IDs provide exact addressing.
+`user_id` is the stable Plex account ID returned by `plex_extended.list_users`. As with libraries, names are supported for convenience but IDs provide exact addressing. When no time-window field is supplied, Plex Extended continues to use the pre-existing history path unchanged.
 
 ### `plex_extended.continue_watching`
 
@@ -301,13 +346,14 @@ A compatible conversation integration can therefore answer questions such as:
 - "Where am I up to in Resident Alien?"
 - "Have I finished Severance?"
 - "What's the next episode of The Last of Us I should watch?"
-- "What movies were added recently?"
-- "What did I watch last night?"
+- "What was added to Plex in the last week?"
+- "Which TV shows got new episodes this week?"
+- "What did I watch between Monday and Friday?"
 - "Give me my Continue Watching list."
 - "Where is Guest up to in that show?"
 - "Show me the technical details for that movie."
 
-The LLM prompt distinguishes `search` (title/name lookup), `query_library` (structured filtering and recommendations), and `watch_status` (TV-series progress/next-episode questions).
+The LLM prompt distinguishes `search` (title/name lookup), `query_library` (structured filtering and recommendations), `watch_status` (TV-series progress/next-episode questions), and the recent-media tools for bounded added/history questions. For recent queries it can use `within_days` for relative requests such as "the last week" or `since`/`before` for explicit ranges, and it can group newly added TV episodes by show or season when that produces a more useful compact answer.
 
 LLM tools that expose viewing-state fields automatically use the Plex user selected in the integration's options. The prompt tells the model not to invent or repeatedly specify a user for ordinary questions; `user`/`user_id` should only be supplied when the request clearly concerns another Plex user.
 
@@ -345,14 +391,14 @@ Plex Extended keeps the Home Assistant action and native LLM layers as thin inte
 Plex Media Server
        │
        ▼
-PlexExtendedClient + per-user context + typed query/progress backends
+PlexExtendedClient + per-user context + typed query/progress/recent-media backends
        │
        ├── Home Assistant response-data actions
        │
        └── Home Assistant native LLM tools
 ```
 
-This prevents the behavior of the action and LLM interfaces from drifting apart. User-scoped server contexts are resolved in one shared layer so search/detail watch metadata, watched-state filtering, TV progress, personalized hubs, recent-addition state, and history use the same selection rules.
+This prevents the behavior of the action and LLM interfaces from drifting apart. User-scoped server contexts are resolved in one shared layer so search/detail watch metadata, watched-state filtering, TV progress, personalized hubs, recent-addition state, and history use the same selection rules. Recent-media time-window and grouping behavior is likewise shared by actions and native LLM tools.
 
 ## Relationship to Home Assistant's Plex integration
 
