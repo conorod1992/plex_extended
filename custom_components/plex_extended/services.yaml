@@ -1,0 +1,250 @@
+search:
+  name: Search Plex
+  description: Search media titles in the configured Plex libraries and return matching items.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    query:
+      name: Query
+      description: Title or search text.
+      required: true
+      selector:
+        text:
+    search_types:
+      name: Media types
+      description: Plex media types to include in the search.
+      default:
+        - movie
+        - show
+      selector:
+        select:
+          multiple: true
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+            - collection
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    library:
+      name: Library
+      description: Optional exact Plex library name.
+      selector:
+        text:
+    include_summary:
+      name: Include summary
+      default: true
+      selector:
+        boolean:
+    include_technical:
+      name: Include technical metadata
+      description: Fetch codec, resolution, bitrate and related media metadata. This can require extra Plex requests.
+      default: false
+      selector:
+        boolean:
+
+recently_added:
+  name: Recently added
+  description: Return recently added Plex media.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    library:
+      name: Library
+      selector:
+        text:
+    media_types:
+      name: Media types
+      selector:
+        select:
+          multiple: true
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+            - collection
+    include_summary:
+      name: Include summary
+      default: true
+      selector:
+        boolean:
+
+recently_watched:
+  name: Recently watched
+  description: Return Plex play history, optionally filtered by Plex user, library or media type.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    library:
+      name: Library
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. If omitted, history for all users visible to the server token is returned.
+      selector:
+        text:
+    media_types:
+      name: Media types
+      selector:
+        select:
+          multiple: true
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+            - collection
+    include_summary:
+      name: Include summary
+      default: true
+      selector:
+        boolean:
+
+continue_watching:
+  name: Continue watching
+  description: Return the Plex Continue Watching hub.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    library:
+      name: Library
+      selector:
+        text:
+    include_summary:
+      name: Include summary
+      default: true
+      selector:
+        boolean:
+
+on_deck:
+  name: On Deck
+  description: Return Plex On Deck items.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    library:
+      name: Library
+      selector:
+        text:
+    include_summary:
+      name: Include summary
+      default: true
+      selector:
+        boolean:
+
+media_details:
+  name: Media details
+  description: Return detailed metadata for a Plex item by rating key.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    rating_key:
+      name: Rating key
+      description: Plex rating key returned by another Plex Extended query.
+      required: true
+      selector:
+        text:
+    include_technical:
+      name: Include technical metadata
+      default: true
+      selector:
+        boolean:
+
+list_libraries:
+  name: List libraries
+  description: Return Plex library names, IDs and types.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+
+list_users:
+  name: List users
+  description: Return Plex users known to the server for watch-history filtering.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+
+test_connection:
+  name: Test connection
+  description: Test the configured Plex server connection and return server details.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
