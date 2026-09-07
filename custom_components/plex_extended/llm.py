@@ -19,11 +19,24 @@ from .const import (
     DEFAULT_LLM_INCLUDE_SUMMARY,
     DEFAULT_SEARCH_TYPES,
     DOMAIN,
+    QUERY_HDR_STATES,
+    QUERY_MEDIA_TYPES,
+    QUERY_SORT_FIELDS,
+    QUERY_SORT_ORDERS,
+    QUERY_WATCH_STATES,
     SEARCH_TYPES,
 )
+from .library_query import async_query_library
 
 LLM_LIMIT = vol.All(vol.Coerce(int), vol.Range(min=1, max=25))
 LLM_TYPES = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
+LLM_TEXT_LIST = vol.All(
+    cv.ensure_list,
+    [vol.All(cv.string, vol.Length(min=1))],
+)
+LLM_YEAR = vol.All(vol.Coerce(int), vol.Range(min=0, max=9999))
+LLM_RATING = vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
+LLM_DURATION = vol.All(vol.Coerce(float), vol.Range(min=0))
 
 
 class PlexTool(Tool):
@@ -108,6 +121,73 @@ class SearchPlexTool(PlexTool):
                 data.get("library_id"),
             )
         )
+
+
+class QueryLibraryPlexTool(PlexTool):
+    """Run a filtered Plex library query."""
+
+    name = "plex_extended__query_library"
+    description = (
+        "Find Plex media by structured criteria rather than title similarity. Use this "
+        "for requests involving genre, people, year, collections, watched state, "
+        "runtime, resolution/HDR, ratings, dates, or sorting."
+    )
+
+    def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
+        super().__init__(clients)
+        self.parameters = vol.Schema(
+            {
+                **self._server_fields(),
+                **self._library_fields(),
+                vol.Required("media_type"): vol.In(QUERY_MEDIA_TYPES),
+                vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+                vol.Optional("genres"): LLM_TEXT_LIST,
+                vol.Optional("genres_all"): LLM_TEXT_LIST,
+                vol.Optional("actors"): LLM_TEXT_LIST,
+                vol.Optional("directors"): LLM_TEXT_LIST,
+                vol.Optional("collections"): LLM_TEXT_LIST,
+                vol.Optional("content_ratings"): LLM_TEXT_LIST,
+                vol.Optional("studios"): LLM_TEXT_LIST,
+                vol.Optional("year"): LLM_YEAR,
+                vol.Optional("year_min"): LLM_YEAR,
+                vol.Optional("year_max"): LLM_YEAR,
+                vol.Optional("decade"): LLM_YEAR,
+                vol.Optional("watched_state", default="any"): vol.In(
+                    QUERY_WATCH_STATES
+                ),
+                vol.Optional("resolutions"): LLM_TEXT_LIST,
+                vol.Optional("hdr", default="any"): vol.In(QUERY_HDR_STATES),
+                vol.Optional("critic_rating_min"): LLM_RATING,
+                vol.Optional("critic_rating_max"): LLM_RATING,
+                vol.Optional("audience_rating_min"): LLM_RATING,
+                vol.Optional("audience_rating_max"): LLM_RATING,
+                vol.Optional("user_rating_min"): LLM_RATING,
+                vol.Optional("user_rating_max"): LLM_RATING,
+                vol.Optional("duration_min_minutes"): LLM_DURATION,
+                vol.Optional("duration_max_minutes"): LLM_DURATION,
+                vol.Optional("added_after"): cv.string,
+                vol.Optional("added_before"): cv.string,
+                vol.Optional("last_viewed_after"): cv.string,
+                vol.Optional("last_viewed_before"): cv.string,
+                vol.Optional("sort_by"): vol.In(QUERY_SORT_FIELDS),
+                vol.Optional("sort_order"): vol.In(QUERY_SORT_ORDERS),
+                vol.Optional("limit", default=10): LLM_LIMIT,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
+            }
+        )
+
+    @override
+    async def async_call(
+        self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
+    ) -> JsonObjectType:
+        data = self.parameters(tool_input.tool_args)
+        client = self._client(data)
+        criteria = dict(data)
+        criteria.pop("server", None)
+        criteria["include_technical"] = False
+        return await self._call(async_query_library(client, criteria))
 
 
 class RecentlyAddedPlexTool(PlexTool):
@@ -369,6 +449,7 @@ def async_get_tools(
     return LLMTools(
         tools=[
             SearchPlexTool(clients),
+            QueryLibraryPlexTool(clients),
             RecentlyAddedPlexTool(clients),
             RecentlyWatchedPlexTool(clients),
             ContinueWatchingPlexTool(clients),
@@ -380,9 +461,12 @@ def async_get_tools(
         prompt=(
             "Use Plex Extended tools for questions about the user's Plex library, "
             "watch history, recently added media, Continue Watching, or On Deck. "
-            "Search/list results are intentionally compact and omit summaries by "
-            "default; call media_details for a selected item when detailed metadata "
-            "or its summary is needed. Search results only include media actually "
-            "present in the configured Plex library."
+            "Use search for title/name lookup and query_library for structured media "
+            "discovery or recommendations involving genres, people, years, watched "
+            "state, runtime, quality, ratings, dates, or sorting. Search/list results "
+            "are intentionally compact and omit summaries by default; call "
+            "media_details for a selected item when detailed metadata or its summary "
+            "is needed. Results only include media actually present in the configured "
+            "Plex library."
         ),
     )
