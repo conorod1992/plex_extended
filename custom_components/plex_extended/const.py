@@ -12,6 +12,7 @@ CONF_MACHINE_IDENTIFIER: Final = "machine_identifier"
 CONF_SERVER_NAME: Final = "server_name"
 CONF_CONFIG_ENTRY_ID: Final = "config_entry_id"
 CONF_DEFAULT_USER_ID: Final = "default_user_id"
+CONF_ALLOW_LLM_MUTATIONS: Final = "allow_llm_mutations"
 
 AUTH_CALLBACK_NAME: Final = "api:plex_extended:auth"
 AUTH_CALLBACK_PATH: Final = "/api/plex_extended/auth"
