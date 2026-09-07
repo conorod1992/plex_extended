@@ -55,17 +55,20 @@ The integration uses the same `PlexAPI` and `plexauth` dependency versions as th
 
 ## Plex user context
 
-Viewing state in Plex is user-specific. Plex Extended can therefore use a selected Plex user's state for watched/unwatched queries, TV progress, Continue Watching, On Deck, and watch history.
+Viewing state in Plex is user-specific. Plex Extended can therefore use a selected Plex user's state consistently wherever returned data depends on viewing state, including watched/unwatched filtering, search/detail metadata, recently added metadata, TV progress, Continue Watching, On Deck, and watch history.
 
 Open **Settings → Devices & services → Plex Extended → Configure** to choose a **Default Plex user**. If no default user is selected, Plex Extended keeps its previous behavior and uses the configured server/account context. This makes the feature backwards compatible for existing installations.
 
 The following capabilities use the configured default Plex user:
 
-- `plex_extended.query_library` when evaluating watched, unwatched, in-progress, last-viewed, or other user-specific state
+- `plex_extended.search` for returned watched/progress metadata
+- `plex_extended.query_library`, including watched, unwatched, in-progress and last-viewed state
 - `plex_extended.watch_status`
+- `plex_extended.recently_added` for returned watched/progress metadata
 - `plex_extended.recently_watched`
 - `plex_extended.continue_watching`
 - `plex_extended.on_deck`
+- `plex_extended.media_details` for returned watched/progress metadata
 - the equivalent native LLM tools
 
 Each of those actions/tools also accepts optional `user` and `user_id` values. An explicit value overrides the configured default for that one call. `user_id` is the stable local Plex account ID returned by `plex_extended.list_users`; if both name and ID are supplied they must identify the same user.
@@ -94,7 +97,7 @@ response_variable: plex_results
 
 Plex user switching requires the Plex account/token used to configure Plex Extended to be the server owner/admin. The normal Plex website setup should therefore be completed using the server owner when household-user state is required. If the integration is connected to a shared server as a non-owner, the normal server context can still be used, but Plex Extended cannot switch that connection into another Plex user's context.
 
-User-scoped Plex server connections are cached after the first successful switch so repeated automation or voice queries do not perform a fresh user switch every time.
+The Configure screen represents the currently authenticated Plex account as **Configured Plex account** and lists alternate household users separately. PMS's local owner account is not duplicated as another selectable option. User-scoped Plex server connections are cached after the first successful switch so repeated automation or voice queries do not perform a fresh user switch every time.
 
 ## Actions
 
@@ -119,7 +122,7 @@ response_variable: plex_results
 
 For mixed media types, Plex Extended performs a single Plex hub search and filters the returned media afterwards. This preserves Plex's own cross-category relevance ordering rather than giving whichever media type is listed first priority over the result limit.
 
-Optional fields include `library`, `library_id`, and `config_entry_id`. If only one Plex Extended server is loaded, `config_entry_id` can be omitted.
+Optional fields include `library`, `library_id`, `user`, `user_id`, and `config_entry_id`. If only one Plex Extended server is loaded, `config_entry_id` can be omitted. The selected/default Plex user does not change title matching, but it does determine returned user-specific fields such as `watched`, `view_count`, and progress.
 
 `library_id` is the stable Plex library section ID returned by `plex_extended.list_libraries`. Names remain convenient, but if two Plex sections share the same name Plex Extended will refuse to silently choose one and will ask for `library_id` instead.
 
@@ -228,7 +231,7 @@ A title lookup prefers exact case-insensitive matches. If more than one exact sh
 
 ### `plex_extended.recently_added`
 
-Returns recently added media. Supports `limit`, `library`, `library_id`, `media_types`, and `include_summary`.
+Returns recently added media. Supports `limit`, `library`, `library_id`, `media_types`, `user`, `user_id`, and `include_summary`. The selected/default Plex user determines any watched/progress metadata returned for those additions; the ordering and definition of "recently added" remain library-wide.
 
 ### `plex_extended.recently_watched`
 
@@ -260,7 +263,7 @@ data:
 response_variable: plex_item
 ```
 
-Technical metadata can include container, bitrate, resolution, video/audio codecs, dimensions, frame rate, and audio channel count. File system paths are deliberately not exposed.
+Optional `user`/`user_id` values override the configured default Plex user for returned watched/progress state. This keeps a `search` → `media_details` → `watch_status` chain in the same Plex user context. Technical metadata can include container, bitrate, resolution, video/audio codecs, dimensions, frame rate, and audio channel count. File system paths are deliberately not exposed.
 
 ### `plex_extended.list_libraries`
 
@@ -306,7 +309,7 @@ A compatible conversation integration can therefore answer questions such as:
 
 The LLM prompt distinguishes `search` (title/name lookup), `query_library` (structured filtering and recommendations), and `watch_status` (TV-series progress/next-episode questions).
 
-Viewing-state LLM tools automatically use the Plex user selected in the integration's options. The prompt tells the model not to invent or repeatedly specify a user for ordinary questions; `user`/`user_id` should only be supplied when the request clearly concerns another Plex user.
+LLM tools that expose viewing-state fields automatically use the Plex user selected in the integration's options. The prompt tells the model not to invent or repeatedly specify a user for ordinary questions; `user`/`user_id` should only be supplied when the request clearly concerns another Plex user.
 
 LLM search/list/query tools omit summaries by default so a broad query does not spend tokens returning many full plot descriptions. `watch_status` also omits the season-by-season breakdown by default for LLM calls because the overall counts and last/current/next episode normally answer the question directly. The action can return the full season breakdown by default.
 
@@ -349,7 +352,7 @@ PlexExtendedClient + per-user context + typed query/progress backends
        └── Home Assistant native LLM tools
 ```
 
-This prevents the behavior of the action and LLM interfaces from drifting apart. User-scoped server contexts are resolved in one shared layer so watched state, TV progress, personalized hubs, and history use the same selection rules.
+This prevents the behavior of the action and LLM interfaces from drifting apart. User-scoped server contexts are resolved in one shared layer so search/detail watch metadata, watched-state filtering, TV progress, personalized hubs, recent-addition state, and history use the same selection rules.
 
 ## Relationship to Home Assistant's Plex integration
 
