@@ -36,14 +36,18 @@ MEDIA_TYPES_SCHEMA = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
 TARGET_SCHEMA = {
     vol.Optional(CONF_CONFIG_ENTRY_ID): cv.string,
 }
+LIBRARY_SCHEMA = {
+    vol.Optional("library"): cv.string,
+    vol.Optional("library_id"): cv.string,
+}
 
 SEARCH_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
         vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("search_types", default=DEFAULT_SEARCH_TYPES): MEDIA_TYPES_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
-        vol.Optional("library"): cv.string,
         vol.Optional("include_summary", default=True): cv.boolean,
         vol.Optional("include_technical", default=False): cv.boolean,
     }
@@ -52,8 +56,8 @@ SEARCH_SCHEMA = vol.Schema(
 RECENT_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
-        vol.Optional("library"): cv.string,
         vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
     }
@@ -62,9 +66,10 @@ RECENT_SCHEMA = vol.Schema(
 HISTORY_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
-        vol.Optional("library"): cv.string,
         vol.Optional("user"): cv.string,
+        vol.Optional("user_id"): cv.string,
         vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
     }
@@ -73,8 +78,8 @@ HISTORY_SCHEMA = vol.Schema(
 BROWSE_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
-        vol.Optional("library"): cv.string,
         vol.Optional("include_summary", default=True): cv.boolean,
     }
 )
@@ -149,6 +154,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 call.data.get("library"),
                 call.data.get("include_summary", True),
                 call.data.get("include_technical", False),
+                call.data.get("library_id"),
             )
         )
 
@@ -160,6 +166,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 call.data.get("library"),
                 call.data.get("media_types"),
                 call.data.get("include_summary", True),
+                call.data.get("library_id"),
             )
         )
 
@@ -172,6 +179,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 call.data.get("user"),
                 call.data.get("media_types"),
                 call.data.get("include_summary", True),
+                call.data.get("library_id"),
+                call.data.get("user_id"),
             )
         )
 
@@ -182,6 +191,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 call.data.get("limit", DEFAULT_LIMIT),
                 call.data.get("library"),
                 call.data.get("include_summary", True),
+                call.data.get("library_id"),
             )
         )
 
@@ -192,6 +202,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 call.data.get("limit", DEFAULT_LIMIT),
                 call.data.get("library"),
                 call.data.get("include_summary", True),
+                call.data.get("library_id"),
             )
         )
 
@@ -205,13 +216,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_list_libraries(call: ServiceCall) -> ServiceResponse:
-        return await _translate_errors(_client_for_call(hass, call).async_list_libraries())
+        return await _translate_errors(
+            _client_for_call(hass, call).async_list_libraries()
+        )
 
     async def handle_list_users(call: ServiceCall) -> ServiceResponse:
         return await _translate_errors(_client_for_call(hass, call).async_list_users())
 
     async def handle_test_connection(call: ServiceCall) -> ServiceResponse:
-        return await _translate_errors(_client_for_call(hass, call).async_test_connection())
+        return await _translate_errors(
+            _client_for_call(hass, call).async_test_connection()
+        )
 
     registrations = (
         (SERVICE_SEARCH, handle_search, SEARCH_SCHEMA),
