@@ -42,7 +42,12 @@ search:
           mode: box
     library:
       name: Library
-      description: Optional exact Plex library name.
+      description: Optional exact Plex library name. Use library ID if names are duplicated.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
     include_summary:
@@ -76,6 +81,12 @@ recently_added:
           mode: box
     library:
       name: Library
+      description: Optional exact Plex library name. Use library ID if names are duplicated.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
     media_types:
@@ -117,11 +128,22 @@ recently_watched:
           mode: box
     library:
       name: Library
+      description: Optional exact Plex library name. Use library ID if names are duplicated.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
     user:
       name: Plex user
       description: Optional Plex user name. If omitted, history for all users visible to the server token is returned.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Takes precedence over name and is useful if names are duplicated.
       selector:
         text:
     media_types:
@@ -163,6 +185,12 @@ continue_watching:
           mode: box
     library:
       name: Library
+      description: Optional exact Plex library name. Use library ID if names are duplicated.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
     include_summary:
@@ -190,6 +218,12 @@ on_deck:
           mode: box
     library:
       name: Library
+      description: Optional exact Plex library name. Use library ID if names are duplicated.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
     include_summary:
@@ -221,7 +255,7 @@ media_details:
 
 list_libraries:
   name: List libraries
-  description: Return Plex library names, IDs and types.
+  description: Return Plex library names, stable IDs and types.
   fields:
     config_entry_id:
       name: Plex server
@@ -231,7 +265,7 @@ list_libraries:
 
 list_users:
   name: List users
-  description: Return Plex users known to the server for watch-history filtering.
+  description: Return Plex users and stable account IDs for watch-history filtering.
   fields:
     config_entry_id:
       name: Plex server
