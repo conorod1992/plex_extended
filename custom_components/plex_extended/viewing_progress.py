@@ -159,7 +159,9 @@ def _resolve_show(
 
     if year is not None:
         candidates = [
-            item for item in candidates if int(getattr(item, "year", -1) or -1) == int(year)
+            item
+            for item in candidates
+            if int(getattr(item, "year", -1) or -1) == int(year)
         ]
 
     exact = [
@@ -205,13 +207,15 @@ def _season_summaries(episodes: list[Any]) -> list[dict[str, Any]]:
         in_progress = sum(
             1 for episode in season_episodes if _is_in_progress(episode)
         )
+        unwatched = total - watched - in_progress
         result.append(
             {
                 "season": season,
                 "total_episodes": total,
                 "watched_episodes": watched,
-                "unwatched_episodes": total - watched,
+                "unwatched_episodes": unwatched,
                 "in_progress_episodes": in_progress,
+                "remaining_episodes": total - watched,
                 "completion_percent": round((watched / total) * 100, 1)
                 if total
                 else 0.0,
@@ -242,14 +246,21 @@ def _watch_status(
     episodes = list(show.episodes())
     if not include_specials:
         episodes = [
-            episode for episode in episodes if int(getattr(episode, "parentIndex", 0) or 0) != 0
+            episode
+            for episode in episodes
+            if int(getattr(episode, "parentIndex", 0) or 0) != 0
         ]
     episodes.sort(key=_episode_sort_key)
 
     total = len(episodes)
     watched_items = [episode for episode in episodes if _is_played(episode)]
     in_progress_items = [episode for episode in episodes if _is_in_progress(episode)]
-    unwatched = total - len(watched_items)
+    unwatched_items = [
+        episode
+        for episode in episodes
+        if not _is_played(episode) and not _is_in_progress(episode)
+    ]
+    remaining = total - len(watched_items)
     complete = bool(total and len(watched_items) == total)
 
     if total == 0:
@@ -307,8 +318,9 @@ def _watch_status(
         "complete": complete,
         "total_episodes": total,
         "watched_episodes": len(watched_items),
-        "unwatched_episodes": unwatched,
+        "unwatched_episodes": len(unwatched_items),
         "in_progress_episodes": len(in_progress_items),
+        "remaining_episodes": remaining,
         "completion_percent": round((len(watched_items) / total) * 100, 1)
         if total
         else 0.0,
