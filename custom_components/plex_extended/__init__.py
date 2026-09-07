@@ -43,6 +43,6 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: PlexExtendedConfigEntry
 ) -> bool:
     """Unload a Plex Extended config entry."""
-    if entry.runtime_data is not None:
-        await entry.runtime_data.async_close()
+    # PlexAPI has no persistent background task in Plex Extended v1. The
+    # runtime client becomes unreachable when Home Assistant unloads the entry.
     return True
