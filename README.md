@@ -2,7 +2,7 @@
 
 Plex Extended is a Home Assistant custom integration that exposes Plex as a queryable media library rather than only as a media player.
 
-It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, structured library discovery, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, metadata, libraries, and users.
+It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, structured library discovery, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, active playback sessions, metadata, libraries, and users.
 
 ## Highlights
 
@@ -14,6 +14,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.
 - Supports fuzzy title search and typed advanced library filtering.
 - Exposes episode-level TV progress, last watched/current episode, and the next episode to watch.
+- Exposes current Plex playback sessions, including player/progress and direct-play/direct-stream/transcode details.
 - Supports bounded recent-media queries and optional TV show/season grouping for large imports.
 - Exposes Plex collections and playlists, including their items.
 - Exposes the configured Plex account's plex.tv Watchlist and can match Watchlist entries to local server media by Plex GUID.
@@ -200,6 +201,24 @@ response_variable: plex_item
 
 Technical metadata can include container, bitrate, resolution, codecs, dimensions, frame rate, and audio channels. Local filesystem paths are deliberately not exposed.
 
+
+### `plex_extended.active_streams`
+
+Returns current Plex playback sessions without controlling the player. Results can include the Plex user, media and progress, player/product/platform, local/remote/relay/security state, selected source quality, session bandwidth/location, and delivery details.
+
+```yaml
+action: plex_extended.active_streams
+data:
+  locality: remote
+  states:
+    - playing
+response_variable: plex_streams
+```
+
+Delivery is classified as `direct_play`, `direct_stream`, `transcode`, or `unknown`. A Plex transcode-session wrapper whose media components are copied rather than transcoded is reported as `direct_stream`, not as a true transcode. Client IP/public addresses, device machine identifiers, Plex tokens, session IDs, and local media file paths are deliberately not returned.
+
+Filters are available for exact Plex username, media type, playback state, local/remote location, and result limit. This action is read-only; it does not pause, stop, or otherwise control playback.
+
 ### `plex_extended.mark_watched` / `plex_extended.mark_unwatched`
 
 Explicitly change one local Plex item's viewing state for the selected/default Plex user. These are side-effecting actions and therefore require an exact local `rating_key`; they deliberately do not accept a title lookup.
@@ -309,6 +328,7 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 - `plex_extended__continue_watching`
 - `plex_extended__on_deck`
 - `plex_extended__media_details`
+- `plex_extended__active_streams`
 - `plex_extended__mark_watched` *(only when Assist write access is enabled)*
 - `plex_extended__mark_unwatched` *(only when Assist write access is enabled)*
 - `plex_extended__list_collections`
@@ -331,6 +351,8 @@ A compatible conversation integration can therefore answer questions such as:
 - "What's in my Christmas playlist?"
 - "Which things on my Plex Watchlist are already on my server?"
 - "Give me my Continue Watching list."
+- "Who is using Plex right now?"
+- "Is anything currently transcoding?"
 - "Where is Guest up to in that show?"
 - "Mark that episode as watched."
 
@@ -382,7 +404,7 @@ This prevents action and LLM behavior from drifting apart. User-scoped server co
 Plex Extended does **not** override or monkey-patch Home Assistant's built-in `plex` integration.
 
 - **Home Assistant Plex:** media players, playback, server/client activity, and existing Plex media-source behavior.
-- **Plex Extended:** querying the library, metadata, recent additions, collections/playlists/Watchlist, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.
+- **Plex Extended:** querying the library, metadata, recent additions, collections/playlists/Watchlist, active playback sessions, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.
 
 Both integrations can be configured against the same Plex account/server at the same time.
 

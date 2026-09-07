@@ -681,6 +681,66 @@ media_details:
       selector:
         boolean:
 
+
+active_streams:
+  name: Active streams
+  description: Return current Plex playback sessions including user, media, player, progress, location, source quality and delivery details.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    user:
+      name: Plex user
+      description: Optional exact Plex username to filter active sessions.
+      selector:
+        text:
+    media_types:
+      name: Media types
+      description: Optional Plex media types to include.
+      selector:
+        select:
+          multiple: true
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+            - collection
+    states:
+      name: Playback states
+      description: Optional playback states to include.
+      selector:
+        select:
+          multiple: true
+          options:
+            - playing
+            - paused
+            - buffering
+    locality:
+      name: Location
+      description: Filter local or remote sessions. Any returns both.
+      default: any
+      selector:
+        select:
+          options:
+            - any
+            - local
+            - remote
+    limit:
+      name: Limit
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+
 mark_watched:
   name: Mark watched
   description: Mark one exact local Plex item watched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
