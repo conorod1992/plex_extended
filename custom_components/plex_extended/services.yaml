@@ -143,7 +143,7 @@ recently_watched:
         text:
     user_id:
       name: Plex user ID
-      description: Optional stable Plex account ID returned by List users. Takes precedence over name and is useful if names are duplicated.
+      description: Optional stable Plex account ID returned by List users. If both name and ID are supplied, they must refer to the same user.
       selector:
         text:
     media_types:
