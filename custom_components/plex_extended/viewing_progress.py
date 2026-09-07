@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Any
 
 from .client import PlexExtendedClient, PlexExtendedError
-from .user_context import resolve_section, resolve_user_context
+from .user_context import resolve_user_context
 
 
 def _episode_sort_key(episode: Any) -> tuple[int, int, str]:
@@ -72,7 +72,7 @@ def _resolve_tv_section(
     """Resolve an optional TV library and reject non-TV sections."""
     if not library and library_id is None:
         return None
-    section = resolve_section(client, server, library, library_id)
+    section = client._section(library, library_id, server)
     assert section is not None
     if str(getattr(section, "type", "")) != "show":
         raise PlexExtendedError(
