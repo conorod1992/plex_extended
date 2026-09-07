@@ -7,6 +7,7 @@ from typing import Any
 
 from .client import PlexExtendedClient, PlexExtendedError
 from .const import DEFAULT_LIMIT
+from .user_context import PlexUserContext, resolve_section, resolve_user_context
 
 _SECTION_TYPE_BY_MEDIA_TYPE = {
     "movie": "movie",
@@ -66,6 +67,7 @@ def _validate_range(
 
 def _resolve_query_section(
     client: PlexExtendedClient,
+    context: PlexUserContext,
     media_type: str,
     library: str | None,
     library_id: str | int | None,
@@ -76,7 +78,7 @@ def _resolve_query_section(
         raise PlexExtendedError(f"Unsupported query media type: {media_type}")
 
     if library or library_id is not None:
-        section = client._section(library, library_id)
+        section = resolve_section(client, context.server, library, library_id)
         assert section is not None
         section_type = str(getattr(section, "type", ""))
         if section_type != expected_type:
@@ -88,7 +90,7 @@ def _resolve_query_section(
 
     sections = [
         section
-        for section in client._require_server().library.sections()
+        for section in context.server.library.sections()
         if str(getattr(section, "type", "")) == expected_type
     ]
     if not sections:
@@ -137,8 +139,6 @@ def _build_filters(criteria: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
     if year is not None:
         filters["year"] = int(year)
     if year_min is not None:
-        # Plex's integer operators are strict (> / <). Offset by one to expose
-        # intuitive inclusive min/max fields to Home Assistant callers.
         filters["year>>"] = int(year_min) - 1
     if year_max is not None:
         filters["year<<"] = int(year_max) + 1
@@ -218,6 +218,7 @@ def _build_sort(criteria: dict[str, Any]) -> str | None:
 
 def _serialize_query_item(
     client: PlexExtendedClient,
+    context: PlexUserContext,
     item: Any,
     *,
     include_summary: bool,
@@ -227,7 +228,7 @@ def _serialize_query_item(
     if include_technical:
         rating_key = getattr(item, "ratingKey", None)
         if rating_key is not None:
-            item = client._require_server().fetchItem(rating_key)
+            item = context.server.fetchItem(rating_key)
 
     result = client._serialize_item(
         item,
@@ -248,9 +249,15 @@ def _query_library(
     criteria: dict[str, Any],
 ) -> dict[str, Any]:
     """Run a typed advanced query against one Plex library section."""
+    context = resolve_user_context(
+        client,
+        criteria.get("user"),
+        criteria.get("user_id"),
+    )
     media_type = str(criteria["media_type"])
     section = _resolve_query_section(
         client,
+        context,
         media_type,
         criteria.get("library"),
         criteria.get("library_id"),
@@ -273,6 +280,7 @@ def _query_library(
     results = [
         _serialize_query_item(
             client,
+            context,
             item,
             include_summary=include_summary,
             include_technical=include_technical,
@@ -280,7 +288,7 @@ def _query_library(
         for item in list(items)[:max_results]
     ]
 
-    return {
+    result: dict[str, Any] = {
         "success": True,
         "count": len(results),
         "library": str(section.title),
@@ -288,6 +296,8 @@ def _query_library(
         "media_type": media_type,
         "results": results,
     }
+    result.update(context.response_fields())
+    return result
 
 
 async def async_query_library(
