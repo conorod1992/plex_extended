@@ -323,13 +323,14 @@ class PlexExtendedOptionsFlow(OptionsFlow):
         except PlexExtendedError:
             return self.async_abort(reason="cannot_load_users")
 
-        choices: dict[str, str] = {
-            "": "Configured Plex account / server owner",
-        }
+        # The current authenticated Plex account is always available as the
+        # empty/default choice. PMS local account ID 1 is the server owner and
+        # would otherwise duplicate that choice for the normal owner-auth setup.
+        choices: dict[str, str] = {"": "Configured Plex account"}
         for user in users_result.get("users", []):
             user_id = str(user.get("id", ""))
             name = str(user.get("name", ""))
-            if user_id and name:
+            if user_id and user_id != "1" and name:
                 choices[user_id] = f"{name} (ID {user_id})"
 
         errors: dict[str, str] = {}
