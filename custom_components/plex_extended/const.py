@@ -27,6 +27,7 @@ MAX_LIMIT: Final = 50
 HISTORY_PAGE_SIZE: Final = 100
 DEFAULT_SEARCH_TYPES: Final = ["movie", "show"]
 DEFAULT_LLM_INCLUDE_SUMMARY: Final = False
+RECENT_TV_GROUPINGS: Final = ("none", "show", "season")
 SEARCH_TYPES: Final = (
     "movie",
     "show",
