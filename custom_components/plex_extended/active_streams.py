@@ -4,38 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
-from homeassistant.helpers import config_validation as cv
-
 from .client import PlexExtendedClient
-from .const import (
-    ACTIVE_STREAM_LOCALITIES,
-    ACTIVE_STREAM_STATES,
-    DEFAULT_LIMIT,
-    DOMAIN,
-    MAX_LIMIT,
-    SEARCH_TYPES,
-    SERVICE_ACTIVE_STREAMS,
-)
-from .services import _client_for_call, _criteria, _translate_errors
-
-ACTIVE_STREAMS_SCHEMA = vol.Schema(
-    {
-        vol.Optional("config_entry_id"): cv.string,
-        vol.Optional("user"): vol.All(cv.string, vol.Length(min=1)),
-        vol.Optional("media_types"): vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)]),
-        vol.Optional("states"): vol.All(
-            cv.ensure_list,
-            [vol.In(ACTIVE_STREAM_STATES)],
-        ),
-        vol.Optional("locality", default="any"): vol.In(ACTIVE_STREAM_LOCALITIES),
-        vol.Optional("limit", default=MAX_LIMIT): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=MAX_LIMIT)
-        ),
-    }
-)
+from .const import MAX_LIMIT
 
 
 def _compact(data: dict[str, Any]) -> dict[str, Any]:
@@ -193,7 +163,7 @@ def _serialize_active_session(item: Any) -> dict[str, Any]:
         }
     )
 
-    session_data = _compact(
+    network = _compact(
         {
             "location": getattr(session, "location", None)
             or getattr(player, "location", None),
@@ -207,7 +177,7 @@ def _serialize_active_session(item: Any) -> dict[str, Any]:
             "state": getattr(player, "state", None),
             "media": media,
             "player": player_data,
-            "network": session_data,
+            "network": network,
             "source": _source_media(source),
             "delivery": _delivery(transcode),
         }
@@ -238,10 +208,10 @@ def _active_streams(
         state = str(getattr(player, "state", "") or "").casefold()
         if states and state not in states:
             continue
-        is_local = bool(getattr(player, "local", False))
-        if locality == "local" and not is_local:
+        local = getattr(player, "local", None)
+        if locality == "local" and local is not True:
             continue
-        if locality == "remote" and is_local:
+        if locality == "remote" and local is not False:
             continue
         filtered.append(item)
 
@@ -262,20 +232,3 @@ async def async_active_streams(
 ) -> dict[str, Any]:
     """Return active streams through the client's executor lock."""
     return await client._async_run(_active_streams, client, dict(criteria))
-
-
-async def async_setup_active_streams_service(hass: HomeAssistant) -> None:
-    """Register the active-streams response-data action."""
-
-    async def handle_active_streams(call: ServiceCall) -> ServiceResponse:
-        return await _translate_errors(
-            async_active_streams(_client_for_call(hass, call), _criteria(call))
-        )
-
-    hass.services.async_register(
-        DOMAIN,
-        SERVICE_ACTIVE_STREAMS,
-        handle_active_streams,
-        schema=ACTIVE_STREAMS_SCHEMA,
-        supports_response=SupportsResponse.ONLY,
-    )
