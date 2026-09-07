@@ -29,6 +29,7 @@ from .client import PlexExtendedClient, PlexExtendedError
 from .const import (
     AUTH_CALLBACK_NAME,
     AUTH_CALLBACK_PATH,
+    CONF_ALLOW_LLM_MUTATIONS,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_DEFAULT_USER_ID,
@@ -313,7 +314,7 @@ class PlexExtendedOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Choose the Plex user used for viewing-state queries by default."""
+        """Configure default Plex user and optional Assist write access."""
         client = self.config_entry.runtime_data
         if not isinstance(client, PlexExtendedClient):
             return self.async_abort(reason="not_loaded")
@@ -336,27 +337,41 @@ class PlexExtendedOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             selected = str(user_input.get(CONF_DEFAULT_USER_ID, ""))
+            allow_llm_mutations = bool(
+                user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)
+            )
             if selected:
                 try:
                     await async_validate_user_context(client, selected)
                 except PlexExtendedError:
                     errors[CONF_DEFAULT_USER_ID] = "invalid_user_context"
-                else:
-                    options = dict(self.config_entry.options)
-                    options[CONF_DEFAULT_USER_ID] = selected
-                    return self.async_create_entry(title="", data=options)
-            else:
-                options = dict(self.config_entry.options)
-                options.pop(CONF_DEFAULT_USER_ID, None)
-                return self.async_create_entry(title="", data=options)
 
-        current = str(self.config_entry.options.get(CONF_DEFAULT_USER_ID, ""))
-        if current not in choices:
-            current = ""
+            if not errors:
+                options = dict(self.config_entry.options)
+                if selected:
+                    options[CONF_DEFAULT_USER_ID] = selected
+                else:
+                    options.pop(CONF_DEFAULT_USER_ID, None)
+                options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations
+                return self.async_create_entry(title="", data=options)
+        else:
+            selected = str(self.config_entry.options.get(CONF_DEFAULT_USER_ID, ""))
+            allow_llm_mutations = bool(
+                self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)
+            )
+
+        if selected not in choices:
+            selected = ""
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
-                {vol.Required(CONF_DEFAULT_USER_ID, default=current): vol.In(choices)}
+                {
+                    vol.Required(CONF_DEFAULT_USER_ID, default=selected): vol.In(choices),
+                    vol.Required(
+                        CONF_ALLOW_LLM_MUTATIONS,
+                        default=allow_llm_mutations,
+                    ): cv.boolean,
+                }
             ),
             errors=errors,
         )

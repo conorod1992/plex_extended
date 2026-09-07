@@ -33,6 +33,8 @@ from .const import (
     SERVICE_LIST_LIBRARIES,
     SERVICE_LIST_PLAYLISTS,
     SERVICE_LIST_USERS,
+    SERVICE_MARK_UNWATCHED,
+    SERVICE_MARK_WATCHED,
     SERVICE_MEDIA_DETAILS,
     SERVICE_ON_DECK,
     SERVICE_PLAYLIST_ITEMS,
@@ -63,6 +65,7 @@ from .user_context import (
     async_search_for_context,
 )
 from .viewing_progress import async_watch_status
+from .watch_state import async_mark_unwatched, async_mark_watched
 
 LIMIT_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=MAX_LIMIT))
 MEDIA_TYPES_SCHEMA = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
@@ -204,6 +207,14 @@ DETAILS_SCHEMA = vol.Schema(
     }
 )
 
+WATCH_STATE_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **USER_SCHEMA,
+        vol.Required("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+    }
+)
+
 LIST_COLLECTIONS_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
@@ -326,7 +337,7 @@ async def _translate_errors(awaitable: Any) -> ServiceResponse:
 
 
 async def async_setup_services(hass: HomeAssistant) -> None:
-    """Register Plex Extended response-data actions."""
+    """Register Plex Extended actions."""
 
     async def handle_search(call: ServiceCall) -> ServiceResponse:
         return await _translate_errors(
@@ -371,6 +382,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 _client_for_call(hass, call), _criteria(call)
             )
         )
+
+    async def handle_mark_watched(call: ServiceCall) -> ServiceResponse | None:
+        result = await _translate_errors(
+            async_mark_watched(_client_for_call(hass, call), _criteria(call))
+        )
+        return result if call.return_response else None
+
+    async def handle_mark_unwatched(call: ServiceCall) -> ServiceResponse | None:
+        result = await _translate_errors(
+            async_mark_unwatched(_client_for_call(hass, call), _criteria(call))
+        )
+        return result if call.return_response else None
 
     async def handle_list_collections(call: ServiceCall) -> ServiceResponse:
         return await _translate_errors(
@@ -435,4 +458,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             handler,
             schema=schema,
             supports_response=SupportsResponse.ONLY,
+        )
+
+    mutation_registrations = (
+        (SERVICE_MARK_WATCHED, handle_mark_watched),
+        (SERVICE_MARK_UNWATCHED, handle_mark_unwatched),
+    )
+    for service, handler in mutation_registrations:
+        hass.services.async_register(
+            DOMAIN,
+            service,
+            handler,
+            schema=WATCH_STATE_SCHEMA,
+            supports_response=SupportsResponse.OPTIONAL,
         )
