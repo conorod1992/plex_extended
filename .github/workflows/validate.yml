@@ -31,3 +31,7 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # These checks require repository-side metadata/brand assets rather
+          # than validating the integration package itself. Remove the ignores
+          # before submitting Plex Extended to the default HACS repository.
+          ignore: brands description topics
