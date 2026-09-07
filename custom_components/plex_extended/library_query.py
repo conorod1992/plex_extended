@@ -7,7 +7,7 @@ from typing import Any
 
 from .client import PlexExtendedClient, PlexExtendedError
 from .const import DEFAULT_LIMIT
-from .user_context import PlexUserContext, resolve_section, resolve_user_context
+from .user_context import PlexUserContext, resolve_user_context
 
 _SECTION_TYPE_BY_MEDIA_TYPE = {
     "movie": "movie",
@@ -78,7 +78,7 @@ def _resolve_query_section(
         raise PlexExtendedError(f"Unsupported query media type: {media_type}")
 
     if library or library_id is not None:
-        section = resolve_section(client, context.server, library, library_id)
+        section = client._section(library, library_id, context.server)
         assert section is not None
         section_type = str(getattr(section, "type", ""))
         if section_type != expected_type:
