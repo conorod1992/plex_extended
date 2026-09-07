@@ -31,6 +31,7 @@ TO_REDACT = {
 FEATURES = [
     "search",
     "query_library",
+    "watch_status",
     "recently_added",
     "recently_watched",
     "continue_watching",
