@@ -18,8 +18,8 @@ jobs:
         with:
           ref: feat/pr9-watch-state-mutations
       - name: Apply focused metadata and README updates
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           services = Path("custom_components/plex_extended/services.yaml")
@@ -27,59 +27,63 @@ jobs:
           marker = "\nlist_collections:\n"
           assert marker in text
           mutation_services = '''
-mark_watched:
-  name: Mark watched
-  description: Mark one exact local Plex item watched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
-  fields:
-    config_entry_id:
-      name: Plex server
-      selector:
-        config_entry:
-          integration: plex_extended
-    rating_key:
-      name: Rating key
-      description: Stable local Plex rating key returned by another Plex Extended action.
-      required: true
-      selector:
-        text:
-    user:
-      name: Plex user
-      description: Optional Plex user name. Overrides the configured default user for this change.
-      selector:
-        text:
-    user_id:
-      name: Plex user ID
-      description: Optional stable Plex account ID. Overrides the configured default user for this change.
-      selector:
-        text:
+          mark_watched:
+            name: Mark watched
+            description: Mark one exact local Plex item watched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
+            fields:
+              config_entry_id:
+                name: Plex server
+                selector:
+                  config_entry:
+                    integration: plex_extended
+              rating_key:
+                name: Rating key
+                description: Stable local Plex rating key returned by another Plex Extended action.
+                required: true
+                selector:
+                  text:
+              user:
+                name: Plex user
+                description: Optional Plex user name. Overrides the configured default user for this change.
+                selector:
+                  text:
+              user_id:
+                name: Plex user ID
+                description: Optional stable Plex account ID. Overrides the configured default user for this change.
+                selector:
+                  text:
 
-mark_unwatched:
-  name: Mark unwatched
-  description: Mark one exact local Plex item unwatched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
-  fields:
-    config_entry_id:
-      name: Plex server
-      selector:
-        config_entry:
-          integration: plex_extended
-    rating_key:
-      name: Rating key
-      description: Stable local Plex rating key returned by another Plex Extended action.
-      required: true
-      selector:
-        text:
-    user:
-      name: Plex user
-      description: Optional Plex user name. Overrides the configured default user for this change.
-      selector:
-        text:
-    user_id:
-      name: Plex user ID
-      description: Optional stable Plex account ID. Overrides the configured default user for this change.
-      selector:
-        text:
-'''
-          services.write_text(text.replace(marker, "\n" + mutation_services + "\nlist_collections:\n", 1))
+          mark_unwatched:
+            name: Mark unwatched
+            description: Mark one exact local Plex item unwatched for the selected/default Plex user. This changes Plex viewing state. Marking a show or season also affects its child episodes.
+            fields:
+              config_entry_id:
+                name: Plex server
+                selector:
+                  config_entry:
+                    integration: plex_extended
+              rating_key:
+                name: Rating key
+                description: Stable local Plex rating key returned by another Plex Extended action.
+                required: true
+                selector:
+                  text:
+              user:
+                name: Plex user
+                description: Optional Plex user name. Overrides the configured default user for this change.
+                selector:
+                  text:
+              user_id:
+                name: Plex user ID
+                description: Optional stable Plex account ID. Overrides the configured default user for this change.
+                selector:
+                  text:
+          '''
+          mutation_services = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in mutation_services.splitlines()
+          ).strip("\n")
+          services.write_text(text.replace(marker, "\n" + mutation_services + "\n\nlist_collections:\n", 1))
 
           readme = Path("README.md")
           text = readme.read_text()
@@ -103,21 +107,25 @@ mark_unwatched:
           action_marker = "\n### `plex_extended.list_collections`\n"
           assert action_marker in text
           action_docs = '''
-### `plex_extended.mark_watched` / `plex_extended.mark_unwatched`
+          ### `plex_extended.mark_watched` / `plex_extended.mark_unwatched`
 
-Explicitly change one local Plex item's viewing state for the selected/default Plex user. These are side-effecting actions and therefore require an exact local `rating_key`; they deliberately do not accept a title lookup.
+          Explicitly change one local Plex item's viewing state for the selected/default Plex user. These are side-effecting actions and therefore require an exact local `rating_key`; they deliberately do not accept a title lookup.
 
-```yaml
-action: plex_extended.mark_watched
-data:
-  rating_key: "1234"
-response_variable: plex_update
-```
+          ```yaml
+          action: plex_extended.mark_watched
+          data:
+            rating_key: "1234"
+          response_variable: plex_update
+          ```
 
-Plex Extended refetches the item after the write and returns an error if Plex does not confirm the requested state. The response includes the previous and current watched state plus the effective Plex user. For shows and seasons, Plex applies the state to child episodes as well; the response reports `scope: item_and_children` so that cascade is explicit.
+          Plex Extended refetches the item after the write and returns an error if Plex does not confirm the requested state. The response includes the previous and current watched state plus the effective Plex user. For shows and seasons, Plex applies the state to child episodes as well; the response reports `scope: item_and_children` so that cascade is explicit.
 
-The manual Home Assistant actions are always available. Native Assist write tools are a separate opt-in controlled by **Settings → Devices & services → Plex Extended → Configure → Allow Assist to change Plex watch state**.
-'''
+          The manual Home Assistant actions are always available. Native Assist write tools are a separate opt-in controlled by **Settings → Devices & services → Plex Extended → Configure → Allow Assist to change Plex watch state**.
+          '''
+          action_docs = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in action_docs.splitlines()
+          ).strip("\n")
           text = text.replace(action_marker, "\n" + action_docs + action_marker, 1)
           text = text.replace(
               "- `plex_extended__media_details`\n",
@@ -151,6 +159,7 @@ The manual Home Assistant actions are always available. Native Assist write tool
           readme.write_text(text)
 
           Path(".github/workflows/pr9-doc-patch.yml").unlink()
+          PY
       - name: Commit patch
         run: |
           git config user.name "github-actions[bot]"
