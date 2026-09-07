@@ -56,8 +56,9 @@ package = ModuleType("custom_components.plex_extended")
 package.__path__ = [str(COMPONENT)]
 sys.modules.setdefault("custom_components.plex_extended", package)
 
-_load_component_module("const", "const.py")
+const_module = _load_component_module("const", "const.py")
 client_module = _load_component_module("client", "client.py")
+_load_component_module("user_context", "user_context.py")
 query_module = _load_component_module("library_query", "library_query.py")
 
 PlexExtendedClient = client_module.PlexExtendedClient
@@ -95,9 +96,12 @@ class FakeLibrary:
 class FakeServer:
     """Minimal server surface used by advanced query tests."""
 
-    def __init__(self, sections: list[FakeSection]) -> None:
+    def __init__(self, sections: list[FakeSection], accounts=None) -> None:
         self.library = FakeLibrary(sections)
         self.fetches: list[str] = []
+        self.accounts = accounts or []
+        self.switched: dict[str, FakeServer] = {}
+        self.switch_calls: list[str] = []
 
     def fetchItem(self, rating_key):
         self.fetches.append(str(rating_key))
@@ -110,20 +114,33 @@ class FakeServer:
             media=[],
         )
 
+    def systemAccounts(self):
+        return list(self.accounts)
 
-def _client(server: FakeServer) -> PlexExtendedClient:
+    def switchUser(self, name):
+        self.switch_calls.append(str(name))
+        return self.switched[str(name)]
+
+
+def _client(
+    server: FakeServer, default_user_id: str | None = None
+) -> PlexExtendedClient:
     client = object.__new__(PlexExtendedClient)
     client._server = server
+    options = {}
+    if default_user_id is not None:
+        options[const_module.CONF_DEFAULT_USER_ID] = default_user_id
+    client.entry = SimpleNamespace(options=options)
     return client
 
 
-def _item(title: str, rating_key: str = "1") -> SimpleNamespace:
+def _item(title: str, rating_key: str = "1", view_count: int = 0) -> SimpleNamespace:
     return SimpleNamespace(
         ratingKey=rating_key,
         type="movie",
         title=title,
         librarySectionID=1,
-        viewCount=0,
+        viewCount=view_count,
         roles=[SimpleNamespace(tag="Sigourney Weaver")],
         collections=[SimpleNamespace(tag="Alien Collection")],
     )
@@ -220,6 +237,36 @@ def test_query_auto_selects_single_compatible_library() -> None:
     assert call["libtype"] == "movie"
     assert call["maxresults"] == 5
     assert call["filters"] == {"genre": ["Horror"], "unwatched": True}
+
+
+def test_query_uses_default_users_library_and_watch_state() -> None:
+    owner_movies = FakeSection("1", "Movies", "movie")
+    user_movies = FakeSection("1", "Movies", "movie")
+    user_movies.search_results = [_item("Alien", view_count=0)]
+    accounts = [
+        SimpleNamespace(id=1, name="Owner"),
+        SimpleNamespace(id=7, name="Conor"),
+    ]
+    owner = FakeServer([owner_movies], accounts)
+    conor = FakeServer([user_movies])
+    owner.switched["Conor"] = conor
+    client = _client(owner, "7")
+
+    result = _query_library(
+        client,
+        {
+            "media_type": "movie",
+            "watched_state": "unwatched",
+            "limit": 5,
+            "include_summary": False,
+        },
+    )
+
+    assert owner_movies.search_calls == []
+    assert user_movies.search_calls[0]["filters"] == {"unwatched": True}
+    assert result["user_id"] == 7
+    assert result["user"] == "Conor"
+    assert result["results"][0]["watched"] is False
 
 
 def test_query_refuses_to_guess_between_multiple_compatible_libraries() -> None:
