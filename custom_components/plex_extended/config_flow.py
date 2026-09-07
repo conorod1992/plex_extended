@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, override
 
 from aiohttp import web_response
 from plexapi.exceptions import Unauthorized
@@ -14,17 +14,24 @@ from requests.exceptions import RequestException
 import voluptuous as vol
 
 from homeassistant.components.http import KEY_HASS, HomeAssistantView
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_TOKEN
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, http
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .client import PlexExtendedClient, PlexExtendedError
 from .const import (
     AUTH_CALLBACK_NAME,
     AUTH_CALLBACK_PATH,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
+    CONF_DEFAULT_USER_ID,
     CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_NAME,
     CONF_SERVER_TOKEN,
@@ -35,6 +42,7 @@ from .const import (
     X_PLEX_PRODUCT,
     X_PLEX_VERSION,
 )
+from .user_context import async_validate_user_context
 
 
 def _provides_server(resource: Any) -> bool:
@@ -87,6 +95,13 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
         self._resources: dict[str, Any] = {}
         self._reauth_entry: ConfigEntry | None = None
         self._target_machine_identifier: str | None = None
+
+    @staticmethod
+    @callback
+    @override
+    def async_get_options_flow(config_entry: ConfigEntry) -> PlexExtendedOptionsFlow:
+        """Return the Plex Extended options flow."""
+        return PlexExtendedOptionsFlow()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -178,9 +193,7 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
         if self._target_machine_identifier:
             if self._target_machine_identifier not in self._resources:
                 return self.async_abort(reason="reauth_server_missing")
-            return await self._async_finish_resource(
-                self._target_machine_identifier
-            )
+            return await self._async_finish_resource(self._target_machine_identifier)
 
         if len(self._resources) == 1:
             return await self._async_finish_resource(next(iter(self._resources)))
@@ -290,6 +303,61 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=vol.Schema({}),
+        )
+
+
+class PlexExtendedOptionsFlow(OptionsFlow):
+    """Configure Plex Extended behavior that is not credential data."""
+
+    @override
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose the Plex user used for viewing-state queries by default."""
+        client = self.config_entry.runtime_data
+        if not isinstance(client, PlexExtendedClient):
+            return self.async_abort(reason="not_loaded")
+
+        try:
+            users_result = await client.async_list_users()
+        except PlexExtendedError:
+            return self.async_abort(reason="cannot_load_users")
+
+        choices: dict[str, str] = {
+            "": "Configured Plex account / server owner",
+        }
+        for user in users_result.get("users", []):
+            user_id = str(user.get("id", ""))
+            name = str(user.get("name", ""))
+            if user_id and name:
+                choices[user_id] = f"{name} (ID {user_id})"
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            selected = str(user_input.get(CONF_DEFAULT_USER_ID, ""))
+            if selected:
+                try:
+                    await async_validate_user_context(client, selected)
+                except PlexExtendedError:
+                    errors[CONF_DEFAULT_USER_ID] = "invalid_user_context"
+                else:
+                    options = dict(self.config_entry.options)
+                    options[CONF_DEFAULT_USER_ID] = selected
+                    return self.async_create_entry(title="", data=options)
+            else:
+                options = dict(self.config_entry.options)
+                options.pop(CONF_DEFAULT_USER_ID, None)
+                return self.async_create_entry(title="", data=options)
+
+        current = str(self.config_entry.options.get(CONF_DEFAULT_USER_ID, ""))
+        if current not in choices:
+            current = ""
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_DEFAULT_USER_ID, default=current): vol.In(choices)}
+            ),
+            errors=errors,
         )
 
 
