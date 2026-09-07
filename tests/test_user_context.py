@@ -60,7 +60,10 @@ context_module = _load_component_module("user_context", "user_context.py")
 PlexExtendedClient = client_module.PlexExtendedClient
 resolve_user_context = context_module.resolve_user_context
 _browse_for_context = context_module._browse_for_context
+_media_details_for_context = context_module._media_details_for_context
+_recently_added_for_context = context_module._recently_added_for_context
 _recently_watched_for_context = context_module._recently_watched_for_context
+_search_for_context = context_module._search_for_context
 
 
 class FakeSection:
@@ -72,12 +75,17 @@ class FakeSection:
         self.type = "show"
         self._continue = []
         self._on_deck = []
+        self._recent = []
 
     def continueWatching(self):
         return list(self._continue)
 
     def onDeck(self):
         return list(self._on_deck)
+
+    def recentlyAdded(self, maxresults=None):
+        items = list(self._recent)
+        return items[:maxresults] if maxresults is not None else items
 
 
 class FakeLibrary:
@@ -86,6 +94,7 @@ class FakeLibrary:
     def __init__(self, sections: list[FakeSection] | None = None) -> None:
         self._sections = sections or [FakeSection()]
         self._on_deck = []
+        self._recent = []
 
     def sections(self):
         return list(self._sections)
@@ -93,9 +102,12 @@ class FakeLibrary:
     def onDeck(self):
         return list(self._on_deck)
 
+    def recentlyAdded(self):
+        return list(self._recent)
+
 
 class FakeServer:
-    """Minimal Plex server with switchUser and personalized hubs."""
+    """Minimal Plex server with switchUser and personalized media state."""
 
     def __init__(self, label: str, accounts=None) -> None:
         self.label = label
@@ -104,6 +116,8 @@ class FakeServer:
         self.switch_calls: list[str] = []
         self.switched: dict[str, FakeServer] = {}
         self._continue = []
+        self._search = []
+        self._items = {}
         self.history = []
         self.fetch_calls = []
 
@@ -116,6 +130,15 @@ class FakeServer:
 
     def continueWatching(self):
         return list(self._continue)
+
+    def search(self, query, mediatype=None, limit=None, sectionId=None):
+        matches = list(self._search)
+        if mediatype is not None:
+            matches = [item for item in matches if item.type == mediatype]
+        return matches[:limit] if limit is not None else matches
+
+    def fetchItem(self, rating_key):
+        return self._items[str(rating_key)]
 
     def fetchItems(
         self,
@@ -130,14 +153,20 @@ class FakeServer:
         return self.history[start : start + size]
 
 
-def _item(title: str, account_id: int | None = None) -> SimpleNamespace:
+def _item(
+    title: str,
+    account_id: int | None = None,
+    *,
+    media_type: str = "episode",
+    view_count: int = 0,
+) -> SimpleNamespace:
     """Create a compact fake media object."""
     return SimpleNamespace(
         title=title,
-        type="episode",
+        type=media_type,
         ratingKey=title,
         librarySectionID=2,
-        viewCount=0,
+        viewCount=view_count,
         accountID=account_id,
     )
 
@@ -251,3 +280,53 @@ def test_history_uses_default_user_id_when_no_override_is_supplied() -> None:
     assert "accountID=7" in owner.fetch_calls[0]["key"]
     assert result["user_id"] == 7
     assert result["user"] == "Conor"
+
+
+def test_search_watched_state_comes_from_default_user_context() -> None:
+    """Fuzzy search must not expose owner watch state when another default is set."""
+    owner, conor, _ = _household_servers()
+    conor._search = [_item("Alien", media_type="movie", view_count=1)]
+    client = _client(owner, "7")
+
+    result = _search_for_context(
+        client,
+        {
+            "query": "Alien",
+            "search_types": ["movie"],
+            "limit": 10,
+            "include_summary": False,
+        },
+    )
+
+    assert result["results"][0]["watched"] is True
+    assert result["user_id"] == 7
+
+
+def test_recently_added_watch_state_comes_from_default_user_context() -> None:
+    """Global recent-add order can still return personalized watch metadata."""
+    owner, conor, _ = _household_servers()
+    conor.library._recent = [_item("New Film", media_type="movie", view_count=1)]
+    client = _client(owner, "7")
+
+    result = _recently_added_for_context(
+        client,
+        {"limit": 10, "include_summary": False},
+    )
+
+    assert result["results"][0]["watched"] is True
+    assert result["user"] == "Conor"
+
+
+def test_media_details_progress_comes_from_default_user_context() -> None:
+    """Detailed metadata must agree with search/query watch state for the same user."""
+    owner, conor, _ = _household_servers()
+    conor._items["Alien"] = _item("Alien", media_type="movie", view_count=1)
+    client = _client(owner, "7")
+
+    result = _media_details_for_context(
+        client,
+        {"rating_key": "Alien", "include_technical": False},
+    )
+
+    assert result["result"]["watched"] is True
+    assert result["user_id"] == 7
