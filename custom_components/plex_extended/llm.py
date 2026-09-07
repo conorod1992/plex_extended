@@ -29,8 +29,11 @@ from .const import (
 from .library_query import async_query_library
 from .user_context import (
     async_continue_watching_for_context,
+    async_media_details_for_context,
     async_on_deck_for_context,
+    async_recently_added_for_context,
     async_recently_watched_for_context,
+    async_search_for_context,
 )
 from .viewing_progress import async_watch_status
 
@@ -107,8 +110,9 @@ class SearchPlexTool(PlexTool):
 
     name = "plex_extended__search"
     description = (
-        "Search the user's Plex libraries for media titles. Results are compact by "
-        "default; use media_details when a full summary or technical data is needed."
+        "Search Plex libraries for media titles. Viewing-state fields in results use the "
+        "configured default Plex user unless user or user_id explicitly overrides it. "
+        "Results are compact by default; use media_details for full details."
     )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
@@ -117,6 +121,7 @@ class SearchPlexTool(PlexTool):
             {
                 **self._server_fields(),
                 **self._library_fields(),
+                **self._user_fields(),
                 vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
                 vol.Optional("search_types", default=DEFAULT_SEARCH_TYPES): LLM_TYPES,
                 vol.Optional("limit", default=10): LLM_LIMIT,
@@ -131,16 +136,10 @@ class SearchPlexTool(PlexTool):
         self, hass: HomeAssistant, tool_input: ToolInput, llm_context: LLMContext
     ) -> JsonObjectType:
         data = self.parameters(tool_input.tool_args)
+        criteria = self._criteria(data)
+        criteria["include_technical"] = False
         return await self._call(
-            self._client(data).async_search(
-                data["query"],
-                data.get("search_types"),
-                data.get("limit", 10),
-                data.get("library"),
-                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
-                False,
-                data.get("library_id"),
-            )
+            async_search_for_context(self._client(data), criteria)
         )
 
 
@@ -256,8 +255,9 @@ class RecentlyAddedPlexTool(PlexTool):
 
     name = "plex_extended__recently_added"
     description = (
-        "Return recently added items from Plex, optionally filtered by library or "
-        "media type. Summaries are omitted by default to keep responses compact."
+        "Return recently added Plex items. Viewing-state fields use the configured default "
+        "Plex user unless user or user_id explicitly overrides it. Summaries are omitted "
+        "by default to keep responses compact."
     )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
@@ -266,6 +266,7 @@ class RecentlyAddedPlexTool(PlexTool):
             {
                 **self._server_fields(),
                 **self._library_fields(),
+                **self._user_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
                 vol.Optional("media_types"): LLM_TYPES,
                 vol.Optional(
@@ -280,12 +281,8 @@ class RecentlyAddedPlexTool(PlexTool):
     ) -> JsonObjectType:
         data = self.parameters(tool_input.tool_args)
         return await self._call(
-            self._client(data).async_recently_added(
-                data.get("limit", 10),
-                data.get("library"),
-                data.get("media_types"),
-                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
-                data.get("library_id"),
+            async_recently_added_for_context(
+                self._client(data), self._criteria(data)
             )
         )
 
@@ -400,8 +397,9 @@ class MediaDetailsPlexTool(PlexTool):
 
     name = "plex_extended__media_details"
     description = (
-        "Get detailed metadata for a Plex item using the rating_key returned by "
-        "another Plex tool. This includes the full summary."
+        "Get detailed metadata for a Plex item using a rating_key returned by another "
+        "Plex tool. Viewing-state/progress fields use the configured default Plex user "
+        "unless user or user_id explicitly overrides it."
     )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
@@ -409,6 +407,7 @@ class MediaDetailsPlexTool(PlexTool):
         self.parameters = vol.Schema(
             {
                 **self._server_fields(),
+                **self._user_fields(),
                 vol.Required("rating_key"): cv.string,
                 vol.Optional("include_technical", default=False): cv.boolean,
             }
@@ -420,8 +419,8 @@ class MediaDetailsPlexTool(PlexTool):
     ) -> JsonObjectType:
         data = self.parameters(tool_input.tool_args)
         return await self._call(
-            self._client(data).async_media_details(
-                data["rating_key"], data.get("include_technical", False)
+            async_media_details_for_context(
+                self._client(data), self._criteria(data)
             )
         )
 
@@ -517,16 +516,16 @@ def async_get_tools(
         prompt=(
             "Use Plex Extended tools for questions about the user's Plex library, watch "
             "history, recently added media, Continue Watching, On Deck, or TV viewing "
-            "progress. Viewing-state tools use the Plex user configured as the integration "
-            "default; do not supply user/user_id unless the request clearly asks about a "
-            "different Plex user. Use search for title/name lookup and query_library for "
-            "structured media discovery or recommendations involving genres, people, "
-            "years, watched state, runtime, quality, ratings, dates, or sorting. Use "
-            "watch_status for questions such as where the user is up to in a TV show, "
-            "whether it is complete, or which episode should be watched next. Search/list "
-            "results are intentionally compact and omit summaries by default; call "
-            "media_details for a selected item when detailed metadata or its summary is "
-            "needed. Results only include media actually present in the configured Plex "
+            "progress. Media/viewing-state tools use the Plex user configured as the "
+            "integration default; do not supply user/user_id unless the request clearly "
+            "asks about a different Plex user. Use search for title/name lookup and "
+            "query_library for structured media discovery or recommendations involving "
+            "genres, people, years, watched state, runtime, quality, ratings, dates, or "
+            "sorting. Use watch_status for questions such as where the user is up to in a "
+            "TV show, whether it is complete, or which episode should be watched next. "
+            "Search/list results are intentionally compact and omit summaries by default; "
+            "call media_details for a selected item when detailed metadata or its summary "
+            "is needed. Results only include media actually present in the configured Plex "
             "library."
         ),
     )
