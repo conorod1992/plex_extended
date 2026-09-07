@@ -13,11 +13,13 @@ from homeassistant.helpers import config_validation as cv
 
 from .client import PlexExtendedAuthenticationError, PlexExtendedClient, PlexExtendedError
 from .const import (
+    COLLECTION_MEDIA_TYPES,
     CONF_CONFIG_ENTRY_ID,
     DEFAULT_LIMIT,
     DEFAULT_SEARCH_TYPES,
     DOMAIN,
     MAX_LIMIT,
+    PLAYLIST_TYPES,
     QUERY_HDR_STATES,
     QUERY_MEDIA_TYPES,
     QUERY_SORT_FIELDS,
@@ -25,17 +27,32 @@ from .const import (
     QUERY_WATCH_STATES,
     RECENT_TV_GROUPINGS,
     SEARCH_TYPES,
+    SERVICE_COLLECTION_ITEMS,
     SERVICE_CONTINUE_WATCHING,
+    SERVICE_LIST_COLLECTIONS,
     SERVICE_LIST_LIBRARIES,
+    SERVICE_LIST_PLAYLISTS,
     SERVICE_LIST_USERS,
     SERVICE_MEDIA_DETAILS,
     SERVICE_ON_DECK,
+    SERVICE_PLAYLIST_ITEMS,
     SERVICE_QUERY_LIBRARY,
     SERVICE_RECENTLY_ADDED,
     SERVICE_RECENTLY_WATCHED,
     SERVICE_SEARCH,
     SERVICE_TEST_CONNECTION,
     SERVICE_WATCH_STATUS,
+    SERVICE_WATCHLIST,
+    WATCHLIST_FILTERS,
+    WATCHLIST_MEDIA_TYPES,
+    WATCHLIST_SORT_FIELDS,
+)
+from .library_lists import (
+    async_collection_items,
+    async_list_collections,
+    async_list_playlists,
+    async_playlist_items,
+    async_watchlist,
 )
 from .library_query import async_query_library
 from .recent_media import async_recently_added, async_recently_watched
@@ -187,6 +204,69 @@ DETAILS_SCHEMA = vol.Schema(
     }
 )
 
+LIST_COLLECTIONS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
+        vol.Optional("media_type"): vol.In(COLLECTION_MEDIA_TYPES),
+        vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
+        vol.Optional("include_summary", default=True): cv.boolean,
+    }
+)
+
+COLLECTION_ITEMS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
+        vol.Optional("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
+        vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
+        vol.Optional("include_summary", default=True): cv.boolean,
+    }
+)
+
+LIST_PLAYLISTS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **USER_SCHEMA,
+        vol.Optional("playlist_type"): vol.In(PLAYLIST_TYPES),
+        vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
+        vol.Optional("include_summary", default=True): cv.boolean,
+    }
+)
+
+PLAYLIST_ITEMS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        **USER_SCHEMA,
+        vol.Optional("rating_key"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("title"): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
+        vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
+        vol.Optional("include_summary", default=True): cv.boolean,
+    }
+)
+
+WATCHLIST_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        vol.Optional("filter", default="all"): vol.In(WATCHLIST_FILTERS),
+        vol.Optional("media_type"): vol.In(WATCHLIST_MEDIA_TYPES),
+        vol.Optional("sort_by", default="watchlisted_at"): vol.In(
+            WATCHLIST_SORT_FIELDS
+        ),
+        vol.Optional("sort_order", default="desc"): vol.In(QUERY_SORT_ORDERS),
+        vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
+        vol.Optional("match_local", default=True): cv.boolean,
+        vol.Optional("include_summary", default=True): cv.boolean,
+    }
+)
+
 TARGET_ONLY_SCHEMA = vol.Schema(TARGET_SCHEMA)
 
 
@@ -292,6 +372,31 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             )
         )
 
+    async def handle_list_collections(call: ServiceCall) -> ServiceResponse:
+        return await _translate_errors(
+            async_list_collections(_client_for_call(hass, call), _criteria(call))
+        )
+
+    async def handle_collection_items(call: ServiceCall) -> ServiceResponse:
+        return await _translate_errors(
+            async_collection_items(_client_for_call(hass, call), _criteria(call))
+        )
+
+    async def handle_list_playlists(call: ServiceCall) -> ServiceResponse:
+        return await _translate_errors(
+            async_list_playlists(_client_for_call(hass, call), _criteria(call))
+        )
+
+    async def handle_playlist_items(call: ServiceCall) -> ServiceResponse:
+        return await _translate_errors(
+            async_playlist_items(_client_for_call(hass, call), _criteria(call))
+        )
+
+    async def handle_watchlist(call: ServiceCall) -> ServiceResponse:
+        return await _translate_errors(
+            async_watchlist(_client_for_call(hass, call), _criteria(call))
+        )
+
     async def handle_list_libraries(call: ServiceCall) -> ServiceResponse:
         return await _translate_errors(
             _client_for_call(hass, call).async_list_libraries()
@@ -314,6 +419,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_CONTINUE_WATCHING, handle_continue_watching, BROWSE_SCHEMA),
         (SERVICE_ON_DECK, handle_on_deck, BROWSE_SCHEMA),
         (SERVICE_MEDIA_DETAILS, handle_media_details, DETAILS_SCHEMA),
+        (SERVICE_LIST_COLLECTIONS, handle_list_collections, LIST_COLLECTIONS_SCHEMA),
+        (SERVICE_COLLECTION_ITEMS, handle_collection_items, COLLECTION_ITEMS_SCHEMA),
+        (SERVICE_LIST_PLAYLISTS, handle_list_playlists, LIST_PLAYLISTS_SCHEMA),
+        (SERVICE_PLAYLIST_ITEMS, handle_playlist_items, PLAYLIST_ITEMS_SCHEMA),
+        (SERVICE_WATCHLIST, handle_watchlist, WATCHLIST_SCHEMA),
         (SERVICE_LIST_LIBRARIES, handle_list_libraries, TARGET_ONLY_SCHEMA),
         (SERVICE_LIST_USERS, handle_list_users, TARGET_ONLY_SCHEMA),
         (SERVICE_TEST_CONNECTION, handle_test_connection, TARGET_ONLY_SCHEMA),

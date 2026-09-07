@@ -681,6 +681,295 @@ media_details:
       selector:
         boolean:
 
+list_collections:
+  name: List collections
+  description: List Plex collections visible to the selected/default Plex user and return stable collection rating keys.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    library:
+      name: Library
+      description: Optional exact library name.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user.
+      selector:
+        text:
+    media_type:
+      name: Collection media type
+      selector:
+        select:
+          options:
+            - movie
+            - show
+            - artist
+            - album
+    title:
+      name: Title contains
+      description: Optional case-insensitive collection-title filter.
+      selector:
+        text:
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+
+collection_items:
+  name: Collection items
+  description: Return items from one Plex collection. Prefer the stable collection rating key returned by List collections.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    rating_key:
+      name: Collection rating key
+      selector:
+        text:
+    title:
+      name: Collection title
+      description: Exact title fallback when a rating key is not supplied. Ambiguous titles are rejected.
+      selector:
+        text:
+    library:
+      name: Library
+      description: Optional exact library name to disambiguate a title.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable library ID to disambiguate a title.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user.
+      selector:
+        text:
+    media_types:
+      name: Media types
+      selector:
+        select:
+          multiple: true
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+            - collection
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+
+list_playlists:
+  name: List playlists
+  description: List Plex playlists visible to the selected/default Plex user and return stable playlist rating keys.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user.
+      selector:
+        text:
+    playlist_type:
+      name: Playlist type
+      selector:
+        select:
+          options:
+            - audio
+            - video
+            - photo
+    title:
+      name: Title
+      description: Optional Plex playlist title filter.
+      selector:
+        text:
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+
+playlist_items:
+  name: Playlist items
+  description: Return items from one Plex playlist. Prefer the stable playlist rating key returned by List playlists.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    rating_key:
+      name: Playlist rating key
+      selector:
+        text:
+    title:
+      name: Playlist title
+      description: Exact title fallback when a rating key is not supplied. Ambiguous titles are rejected.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user.
+      selector:
+        text:
+    media_types:
+      name: Media types
+      selector:
+        select:
+          multiple: true
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+            - collection
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+
+watchlist:
+  name: Plex Watchlist
+  description: Return the configured Plex account's plex.tv Watchlist and optionally match entries to media on this Plex server. The integration's default household Plex user does not apply to this account-level list.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended connection whose configured Plex account and local server are used.
+      selector:
+        config_entry:
+          integration: plex_extended
+    filter:
+      name: Filter
+      default: all
+      selector:
+        select:
+          options:
+            - all
+            - available
+            - released
+    media_type:
+      name: Media type
+      selector:
+        select:
+          options:
+            - movie
+            - show
+    sort_by:
+      name: Sort by
+      default: watchlisted_at
+      selector:
+        select:
+          options:
+            - watchlisted_at
+            - title
+            - release_date
+            - critic_rating
+    sort_order:
+      name: Sort order
+      default: desc
+      selector:
+        select:
+          options:
+            - asc
+            - desc
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    match_local:
+      name: Match to local library
+      description: Match each Watchlist movie/show to media on the configured server using its Plex GUID.
+      default: true
+      selector:
+        boolean:
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+
 list_libraries:
   name: List libraries
   description: Return Plex library names, stable IDs and types.
