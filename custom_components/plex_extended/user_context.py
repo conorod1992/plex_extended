@@ -9,7 +9,12 @@ from plexapi.exceptions import Unauthorized
 from plexapi.server import PlexServer
 
 from .client import PlexExtendedClient, PlexExtendedError
-from .const import CONF_DEFAULT_USER_ID, DEFAULT_LIMIT
+from .const import (
+    CONF_DEFAULT_USER_ID,
+    DEFAULT_LIMIT,
+    DEFAULT_SEARCH_TYPES,
+    MAX_LIMIT,
+)
 
 
 @dataclass(slots=True)
@@ -66,9 +71,9 @@ def resolve_user_context(
 
     name = users[account_id]
 
-    # Plex Media Server reserves local system account ID 1 for the server
-    # owner/admin. switchUser() intentionally resolves only other Plex users,
-    # so the configured owner uses the already-authenticated base server.
+    # Local PMS account ID 1 represents the server owner. switchUser() resolves
+    # only the owner's other linked/home users, so owner state is the base server
+    # context. Household-user switching itself is only supported from owner auth.
     if account_id == 1:
         return PlexUserContext(base_server, account_id, name, users)
 
@@ -131,6 +136,178 @@ def resolve_section(
             f"(matching IDs: {ids})"
         )
     return matches[0]
+
+
+def _search_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Search Plex through the selected user's server context."""
+    context = resolve_user_context(
+        client,
+        criteria.get("user"),
+        criteria.get("user_id"),
+    )
+    section = resolve_section(
+        client,
+        context.server,
+        criteria.get("library"),
+        criteria.get("library_id"),
+    )
+    section_id = section.key if section else None
+    media_types = client._normalize_types(
+        criteria.get("search_types") or DEFAULT_SEARCH_TYPES
+    )
+    requested_types = set(media_types)
+    max_results = client._normalize_limit(criteria.get("limit", DEFAULT_LIMIT))
+    mediatype = media_types[0] if len(media_types) == 1 else None
+
+    matches = context.server.search(
+        criteria["query"],
+        mediatype=mediatype,
+        limit=max_results,
+        sectionId=section_id,
+    )
+
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    include_summary = bool(criteria.get("include_summary", True))
+    include_technical = bool(criteria.get("include_technical", False))
+    for match in matches:
+        match_type = str(getattr(match, "type", ""))
+        if match_type not in requested_types:
+            continue
+        match_library_id = getattr(match, "librarySectionID", None)
+        rating_key = getattr(match, "ratingKey", None)
+        if match_library_id is None or rating_key is None:
+            continue
+        if section_id is not None and str(match_library_id) != str(section_id):
+            continue
+
+        identity = (match_type, str(rating_key))
+        if identity in seen:
+            continue
+        seen.add(identity)
+
+        if include_technical:
+            try:
+                match = context.server.fetchItem(rating_key)
+            except Exception:
+                pass
+        results.append(
+            client._serialize_item(
+                match,
+                include_summary=include_summary,
+                include_technical=include_technical,
+            )
+        )
+        if len(results) >= max_results:
+            break
+
+    result: dict[str, Any] = {
+        "success": True,
+        "query": criteria["query"],
+        "count": len(results),
+        "results": results,
+    }
+    result.update(context.response_fields())
+    return result
+
+
+async def async_search_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Search Plex using explicit/default user viewing state."""
+    return await client._async_run(_search_for_context, client, dict(criteria))
+
+
+def _recently_added_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Return recent additions with selected-user watch/progress metadata."""
+    context = resolve_user_context(
+        client,
+        criteria.get("user"),
+        criteria.get("user_id"),
+    )
+    max_results = client._normalize_limit(criteria.get("limit", DEFAULT_LIMIT))
+    types = set(criteria.get("media_types") or [])
+    section = resolve_section(
+        client,
+        context.server,
+        criteria.get("library"),
+        criteria.get("library_id"),
+    )
+    if section:
+        items = section.recentlyAdded(maxresults=MAX_LIMIT)
+    else:
+        items = context.server.library.recentlyAdded()
+    if types:
+        items = [item for item in items if getattr(item, "type", None) in types]
+    items = list(items)[:max_results]
+
+    result: dict[str, Any] = {
+        "success": True,
+        "count": len(items),
+        "results": [
+            client._serialize_item(
+                item,
+                include_summary=bool(criteria.get("include_summary", True)),
+            )
+            for item in items
+        ],
+    }
+    result.update(context.response_fields())
+    return result
+
+
+async def async_recently_added_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Return recent additions using selected/default Plex user metadata."""
+    return await client._async_run(
+        _recently_added_for_context,
+        client,
+        dict(criteria),
+    )
+
+
+def _media_details_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Return one Plex item's metadata in the selected user's context."""
+    context = resolve_user_context(
+        client,
+        criteria.get("user"),
+        criteria.get("user_id"),
+    )
+    item = context.server.fetchItem(criteria["rating_key"])
+    result: dict[str, Any] = {
+        "success": True,
+        "result": client._serialize_item(
+            item,
+            include_summary=True,
+            include_technical=bool(criteria.get("include_technical", True)),
+        ),
+    }
+    result.update(context.response_fields())
+    return result
+
+
+async def async_media_details_for_context(
+    client: PlexExtendedClient,
+    criteria: dict[str, Any],
+) -> dict[str, Any]:
+    """Return item details using selected/default Plex user state."""
+    return await client._async_run(
+        _media_details_for_context,
+        client,
+        dict(criteria),
+    )
 
 
 def _recently_watched_for_context(
