@@ -33,9 +33,9 @@ def test_mutation_tool_descriptions_require_explicit_exact_ids() -> None:
 
     assert source.count("SIDE EFFECT:") >= 2
     assert source.count("Use only when the user explicitly asks to change watch state") >= 2
-    # The sentence is intentionally split over adjacent source literals for line length.
-    assert source.count('"never infer "') >= 2
-    assert source.count('"a rating_key from a title') >= 2
+    # The sentence is split over adjacent source literals for line length.
+    assert source.count("never infer ") >= 2
+    assert source.count("a rating_key from a title") >= 2
 
 
 def test_services_yaml_exposes_both_mutation_actions_with_valid_selectors() -> None:
