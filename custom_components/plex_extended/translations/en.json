@@ -47,5 +47,23 @@
       "reauth_successful": "Plex Extended was reconnected successfully.",
       "token_request_timeout": "Plex authorization timed out. Please try again."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Plex Extended options",
+        "description": "Choose the Plex user whose viewing state Plex Extended should use by default. Actions and LLM tools can still override this user for an individual query.",
+        "data": {
+          "default_user_id": "Default Plex user"
+        }
+      }
+    },
+    "error": {
+      "invalid_user_context": "Plex Extended could not access this server as the selected user. The configured Plex account must be the server owner to switch users."
+    },
+    "abort": {
+      "not_loaded": "Plex Extended must be loaded before its options can be changed.",
+      "cannot_load_users": "Plex Extended could not load Plex users from this server."
+    }
   }
 }

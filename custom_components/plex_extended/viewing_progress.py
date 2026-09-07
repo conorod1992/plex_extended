@@ -6,6 +6,7 @@ from collections import defaultdict
 from typing import Any
 
 from .client import PlexExtendedClient, PlexExtendedError
+from .user_context import resolve_user_context
 
 
 def _episode_sort_key(episode: Any) -> tuple[int, int, str]:
@@ -64,13 +65,14 @@ def _episode_payload(
 
 def _resolve_tv_section(
     client: PlexExtendedClient,
+    server: Any,
     library: str | None,
     library_id: str | int | None,
 ) -> Any | None:
     """Resolve an optional TV library and reject non-TV sections."""
     if not library and library_id is None:
         return None
-    section = client._section(library, library_id)
+    section = client._section(library, library_id, server)
     assert section is not None
     if str(getattr(section, "type", "")) != "show":
         raise PlexExtendedError(
@@ -100,17 +102,16 @@ def _resolve_show(
     year: int | None,
     library: str | None,
     library_id: str | int | None,
+    server: Any | None = None,
 ) -> Any:
     """Resolve one show by stable rating key or an unambiguous title search."""
-    server = client._require_server()
-    section = _resolve_tv_section(client, library, library_id)
+    server = server or client._require_server()
+    section = _resolve_tv_section(client, server, library, library_id)
 
     if rating_key:
         show = server.fetchItem(rating_key)
         if str(getattr(show, "type", "")) != "show":
-            raise PlexExtendedError(
-                f"Plex rating key {rating_key} is not a TV show"
-            )
+            raise PlexExtendedError(f"Plex rating key {rating_key} is not a TV show")
         if section is not None and str(getattr(show, "librarySectionID", "")) != str(
             section.key
         ):
@@ -233,6 +234,11 @@ def _watch_status(
     include_summary = bool(criteria.get("include_summary", True))
     include_seasons = bool(criteria.get("include_seasons", True))
     include_specials = bool(criteria.get("include_specials", False))
+    context = resolve_user_context(
+        client,
+        criteria.get("user"),
+        criteria.get("user_id"),
+    )
 
     show = _resolve_show(
         client,
@@ -241,6 +247,7 @@ def _watch_status(
         year=criteria.get("year"),
         library=criteria.get("library"),
         library_id=criteria.get("library_id"),
+        server=context.server,
     )
 
     episodes = list(show.episodes())
@@ -339,6 +346,7 @@ def _watch_status(
             client, next_episode, include_summary=include_summary
         ),
     }
+    result.update(context.response_fields())
     if include_seasons:
         result["seasons"] = _season_summaries(episodes)
     return result

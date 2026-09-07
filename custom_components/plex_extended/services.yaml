@@ -50,6 +50,16 @@ search:
       description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for watched/progress fields returned by search.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
     include_summary:
       name: Include summary
       default: true
@@ -94,6 +104,16 @@ query_library:
     library_id:
       name: Library ID
       description: Optional stable Plex library section ID returned by List libraries.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for watched, unwatched, in-progress and other user-state fields.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
     title:
@@ -171,7 +191,7 @@ query_library:
     watched_state:
       name: Watched state
       default: any
-      description: Plex-native watched state filter. For TV libraries, Plex may evaluate unwatched state at episode level.
+      description: Plex-native watched state filter evaluated for the selected/default Plex user.
       selector:
         select:
           options:
@@ -355,6 +375,16 @@ watch_status:
       description: Optional stable Plex TV library section ID returned by List libraries.
       selector:
         text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for episode progress and next-episode state.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
     include_specials:
       name: Include specials
       description: Include season 0/special episodes in counts, completion and next-episode fallback logic.
@@ -376,7 +406,7 @@ watch_status:
 
 recently_added:
   name: Recently added
-  description: Return recently added Plex media.
+  description: Return recently added Plex media with watch/progress fields evaluated for the selected/default Plex user.
   fields:
     config_entry_id:
       name: Plex server
@@ -399,6 +429,16 @@ recently_added:
     library_id:
       name: Library ID
       description: Optional stable Plex library section ID returned by List libraries.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for watched/progress metadata on returned items.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
     media_types:
@@ -450,12 +490,12 @@ recently_watched:
         text:
     user:
       name: Plex user
-      description: Optional Plex user name. If omitted, history for all users visible to the server token is returned.
+      description: Optional Plex user name. Overrides the configured default user. If neither is set, history visible to the configured server token is returned.
       selector:
         text:
     user_id:
       name: Plex user ID
-      description: Optional stable Plex account ID returned by List users. If both name and ID are supplied, they must refer to the same user.
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
     media_types:
@@ -480,7 +520,7 @@ recently_watched:
 
 continue_watching:
   name: Continue watching
-  description: Return the Plex Continue Watching hub.
+  description: Return the personalized Plex Continue Watching hub.
   fields:
     config_entry_id:
       name: Plex server
@@ -503,6 +543,16 @@ continue_watching:
     library_id:
       name: Library ID
       description: Optional stable Plex library section ID returned by List libraries.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for this personalized hub.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
     include_summary:
@@ -513,7 +563,7 @@ continue_watching:
 
 on_deck:
   name: On Deck
-  description: Return Plex On Deck items.
+  description: Return personalized Plex On Deck items.
   fields:
     config_entry_id:
       name: Plex server
@@ -538,6 +588,16 @@ on_deck:
       description: Optional stable Plex library section ID returned by List libraries.
       selector:
         text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for this personalized hub.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
     include_summary:
       name: Include summary
       default: true
@@ -546,7 +606,7 @@ on_deck:
 
 media_details:
   name: Media details
-  description: Return detailed metadata for a Plex item by rating key.
+  description: Return detailed metadata for a Plex item by rating key, including viewing state for the selected/default Plex user.
   fields:
     config_entry_id:
       name: Plex server
@@ -557,6 +617,16 @@ media_details:
       name: Rating key
       description: Plex rating key returned by another Plex Extended query.
       required: true
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for watched/progress fields.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
       selector:
         text:
     include_technical:
@@ -577,7 +647,7 @@ list_libraries:
 
 list_users:
   name: List users
-  description: Return Plex users and stable account IDs for watch-history filtering.
+  description: Return Plex users and stable account IDs for viewing-state queries.
   fields:
     config_entry_id:
       name: Plex server

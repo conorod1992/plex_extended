@@ -141,12 +141,14 @@ class PlexExtendedClient:
         self,
         library: str | None = None,
         library_id: str | int | None = None,
+        server: PlexServer | None = None,
     ) -> Any | None:
         """Resolve a library by exact ID or unambiguous case-insensitive name."""
         if not library and library_id is None:
             return None
 
-        sections = self._require_server().library.sections()
+        target_server = server or self._require_server()
+        sections = target_server.library.sections()
 
         if library_id is not None:
             wanted_id = str(library_id)
@@ -292,21 +294,18 @@ class PlexExtendedClient:
         include_summary: bool,
         include_technical: bool,
         library_id: str | int | None = None,
+        server: PlexServer | None = None,
     ) -> dict[str, Any]:
         """Search Plex while preserving Plex's cross-category relevance ordering."""
-        server = self._require_server()
-        section = self._section(library, library_id)
+        target_server = server or self._require_server()
+        section = self._section(library, library_id, target_server)
         section_id = section.key if section else None
         media_types = self._normalize_types(search_types)
         requested_types = set(media_types)
         max_results = self._normalize_limit(limit)
 
-        # A single-type query can use Plex's native type filter. For mixed queries,
-        # request the hub search once and filter the flattened results afterwards.
-        # This preserves Plex's own relevance ordering instead of biasing whichever
-        # media type happened to be listed first by the caller.
         mediatype = media_types[0] if len(media_types) == 1 else None
-        matches = server.search(
+        matches = target_server.search(
             query,
             mediatype=mediatype,
             limit=max_results,
@@ -320,8 +319,6 @@ class PlexExtendedClient:
             if match_type not in requested_types:
                 continue
 
-            # Plex hub search can include online/external media. Plex Extended is
-            # deliberately a library search, so only return server library items.
             match_library_id = getattr(match, "librarySectionID", None)
             rating_key = getattr(match, "ratingKey", None)
             if match_library_id is None or rating_key is None:
@@ -336,7 +333,7 @@ class PlexExtendedClient:
 
             if include_technical:
                 try:
-                    match = server.fetchItem(rating_key)
+                    match = target_server.fetchItem(rating_key)
                 except Exception:
                     pass
 
@@ -386,16 +383,17 @@ class PlexExtendedClient:
         media_types: list[str] | None,
         include_summary: bool,
         library_id: str | int | None = None,
+        server: PlexServer | None = None,
     ) -> dict[str, Any]:
         """Return recently added media."""
-        server = self._require_server()
+        target_server = server or self._require_server()
         max_results = self._normalize_limit(limit)
         types = set(media_types or [])
-        section = self._section(library, library_id)
+        section = self._section(library, library_id, target_server)
         if section:
             items = section.recentlyAdded(maxresults=MAX_LIMIT)
         else:
-            items = server.library.recentlyAdded()
+            items = target_server.library.recentlyAdded()
         if types:
             items = [item for item in items if getattr(item, "type", None) in types]
         items = list(items)[:max_results]
@@ -571,14 +569,16 @@ class PlexExtendedClient:
         library: str | None,
         include_summary: bool,
         library_id: str | int | None = None,
+        server: PlexServer | None = None,
     ) -> dict[str, Any]:
         """Return Continue Watching items."""
+        target_server = server or self._require_server()
         max_results = self._normalize_limit(limit)
-        section = self._section(library, library_id)
+        section = self._section(library, library_id, target_server)
         items = (
             section.continueWatching()
             if section
-            else self._require_server().continueWatching()
+            else target_server.continueWatching()
         )
         items = list(items)[:max_results]
         return {
@@ -612,11 +612,13 @@ class PlexExtendedClient:
         library: str | None,
         include_summary: bool,
         library_id: str | int | None = None,
+        server: PlexServer | None = None,
     ) -> dict[str, Any]:
         """Return On Deck items."""
+        target_server = server or self._require_server()
         max_results = self._normalize_limit(limit)
-        section = self._section(library, library_id)
-        items = section.onDeck() if section else self._require_server().library.onDeck()
+        section = self._section(library, library_id, target_server)
+        items = section.onDeck() if section else target_server.library.onDeck()
         items = list(items)[:max_results]
         return {
             "success": True,
@@ -644,10 +646,14 @@ class PlexExtendedClient:
         )
 
     def _media_details(
-        self, rating_key: str, include_technical: bool
+        self,
+        rating_key: str,
+        include_technical: bool,
+        server: PlexServer | None = None,
     ) -> dict[str, Any]:
         """Return details for a Plex rating key."""
-        item = self._require_server().fetchItem(rating_key)
+        target_server = server or self._require_server()
+        item = target_server.fetchItem(rating_key)
         return {
             "success": True,
             "result": self._serialize_item(

@@ -56,8 +56,9 @@ package = sys.modules.setdefault(
 )
 package.__path__ = [str(COMPONENT)]
 
-_load_component_module("const", "const.py")
+const_module = _load_component_module("const", "const.py")
 client_module = _load_component_module("client", "client.py")
+_load_component_module("user_context", "user_context.py")
 progress_module = _load_component_module("viewing_progress", "viewing_progress.py")
 
 PlexExtendedClient = client_module.PlexExtendedClient
@@ -123,10 +124,14 @@ class FakeServer:
         self,
         shows: list[FakeShow],
         sections: list[FakeSection] | None = None,
+        accounts=None,
     ) -> None:
         self.shows = shows
         self.library = FakeLibrary(sections or [FakeSection("2", "TV Shows")])
         self.search_calls: list[dict[str, object]] = []
+        self.accounts = accounts or []
+        self.switched: dict[str, FakeServer] = {}
+        self.switch_calls: list[str] = []
 
     def fetchItem(self, rating_key):
         for show in self.shows:
@@ -148,6 +153,13 @@ class FakeServer:
             for show in self.shows
             if sectionId is None or str(show.librarySectionID) == str(sectionId)
         ]
+
+    def systemAccounts(self):
+        return list(self.accounts)
+
+    def switchUser(self, name):
+        self.switch_calls.append(str(name))
+        return self.switched[str(name)]
 
 
 def _episode(
@@ -178,9 +190,15 @@ def _episode(
     )
 
 
-def _client(server: FakeServer) -> PlexExtendedClient:
+def _client(
+    server: FakeServer, default_user_id: str | None = None
+) -> PlexExtendedClient:
     client = object.__new__(PlexExtendedClient)
     client._server = server
+    options = {}
+    if default_user_id is not None:
+        options[const_module.CONF_DEFAULT_USER_ID] = default_user_id
+    client.entry = SimpleNamespace(options=options)
     return client
 
 
@@ -222,6 +240,33 @@ def test_watch_status_reports_current_and_next_episode() -> None:
     assert result["seasons"][0]["in_progress_episodes"] == 1
     assert result["seasons"][0]["remaining_episodes"] == 2
     assert result["seasons"][0]["complete"] is False
+
+
+def test_watch_status_uses_default_users_episode_state() -> None:
+    """TV progress must come from the selected user's Plex server context."""
+    owner_episode = _episode(1, 1, "Pilot", watched=True)
+    user_episode = _episode(1, 1, "Pilot", watched=False)
+    owner_show = FakeShow("Resident Alien", "10", [owner_episode])
+    user_show = FakeShow("Resident Alien", "10", [user_episode])
+    accounts = [
+        SimpleNamespace(id=1, name="Owner"),
+        SimpleNamespace(id=7, name="Conor"),
+    ]
+    owner = FakeServer([owner_show], accounts=accounts)
+    conor = FakeServer([user_show])
+    owner.switched["Conor"] = conor
+
+    result = _watch_status(
+        _client(owner, "7"),
+        {"rating_key": "10", "include_summary": False},
+    )
+
+    assert result["status"] == "unwatched"
+    assert result["watched_episodes"] == 0
+    assert result["unwatched_episodes"] == 1
+    assert result["user_id"] == 7
+    assert result["user"] == "Conor"
+    assert owner.switch_calls == ["Conor"]
 
 
 def test_complete_show_has_no_next_episode() -> None:
