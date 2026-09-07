@@ -15,7 +15,12 @@ from homeassistant.helpers.llm import LLM_API_ASSIST, LLMContext, Tool, ToolInpu
 from homeassistant.util.json import JsonObjectType
 
 from .client import PlexExtendedAuthenticationError, PlexExtendedClient, PlexExtendedError
-from .const import DEFAULT_SEARCH_TYPES, DOMAIN, SEARCH_TYPES
+from .const import (
+    DEFAULT_LLM_INCLUDE_SUMMARY,
+    DEFAULT_SEARCH_TYPES,
+    DOMAIN,
+    SEARCH_TYPES,
+)
 
 LLM_LIMIT = vol.All(vol.Coerce(int), vol.Range(min=1, max=25))
 LLM_TYPES = vol.All(cv.ensure_list, [vol.In(SEARCH_TYPES)])
@@ -33,6 +38,14 @@ class PlexTool(Tool):
         if len(self._clients) <= 1:
             return {}
         return {vol.Required("server"): vol.In(list(self._clients))}
+
+    @staticmethod
+    def _library_fields() -> dict[Any, Any]:
+        """Return stable and human-friendly library selectors."""
+        return {
+            vol.Optional("library"): cv.string,
+            vol.Optional("library_id"): cv.string,
+        }
 
     def _client(self, data: dict[str, Any]) -> PlexExtendedClient:
         """Resolve the client selected by the LLM."""
@@ -59,18 +72,23 @@ class SearchPlexTool(PlexTool):
     """Search Plex libraries."""
 
     name = "plex_extended__search"
-    description = "Search the user's Plex libraries for media titles."
+    description = (
+        "Search the user's Plex libraries for media titles. Results are compact by "
+        "default; use media_details when a full summary or technical data is needed."
+    )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
         self.parameters = vol.Schema(
             {
                 **self._server_fields(),
+                **self._library_fields(),
                 vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
                 vol.Optional("search_types", default=DEFAULT_SEARCH_TYPES): LLM_TYPES,
                 vol.Optional("limit", default=10): LLM_LIMIT,
-                vol.Optional("library"): cv.string,
-                vol.Optional("include_summary", default=True): cv.boolean,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
             }
         )
 
@@ -85,8 +103,9 @@ class SearchPlexTool(PlexTool):
                 data.get("search_types"),
                 data.get("limit", 10),
                 data.get("library"),
-                data.get("include_summary", True),
+                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
                 False,
+                data.get("library_id"),
             )
         )
 
@@ -95,17 +114,22 @@ class RecentlyAddedPlexTool(PlexTool):
     """Return recently added Plex media."""
 
     name = "plex_extended__recently_added"
-    description = "Return recently added items from Plex, optionally filtered by library or media type."
+    description = (
+        "Return recently added items from Plex, optionally filtered by library or "
+        "media type. Summaries are omitted by default to keep responses compact."
+    )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
         self.parameters = vol.Schema(
             {
                 **self._server_fields(),
+                **self._library_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
-                vol.Optional("library"): cv.string,
                 vol.Optional("media_types"): LLM_TYPES,
-                vol.Optional("include_summary", default=True): cv.boolean,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
             }
         )
 
@@ -119,7 +143,8 @@ class RecentlyAddedPlexTool(PlexTool):
                 data.get("limit", 10),
                 data.get("library"),
                 data.get("media_types"),
-                data.get("include_summary", True),
+                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
+                data.get("library_id"),
             )
         )
 
@@ -128,18 +153,24 @@ class RecentlyWatchedPlexTool(PlexTool):
     """Return Plex watch history."""
 
     name = "plex_extended__recently_watched"
-    description = "Return recent Plex watch history, optionally filtered by Plex user, library, or media type."
+    description = (
+        "Return recent Plex watch history, optionally filtered by Plex user, "
+        "library, or media type. Use user_id/library_id when exact addressing is needed."
+    )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
         self.parameters = vol.Schema(
             {
                 **self._server_fields(),
+                **self._library_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
-                vol.Optional("library"): cv.string,
                 vol.Optional("user"): cv.string,
+                vol.Optional("user_id"): cv.string,
                 vol.Optional("media_types"): LLM_TYPES,
-                vol.Optional("include_summary", default=True): cv.boolean,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
             }
         )
 
@@ -154,7 +185,9 @@ class RecentlyWatchedPlexTool(PlexTool):
                 data.get("library"),
                 data.get("user"),
                 data.get("media_types"),
-                data.get("include_summary", True),
+                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
+                data.get("library_id"),
+                data.get("user_id"),
             )
         )
 
@@ -170,9 +203,11 @@ class ContinueWatchingPlexTool(PlexTool):
         self.parameters = vol.Schema(
             {
                 **self._server_fields(),
+                **self._library_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
-                vol.Optional("library"): cv.string,
-                vol.Optional("include_summary", default=True): cv.boolean,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
             }
         )
 
@@ -185,7 +220,8 @@ class ContinueWatchingPlexTool(PlexTool):
             self._client(data).async_continue_watching(
                 data.get("limit", 10),
                 data.get("library"),
-                data.get("include_summary", True),
+                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
+                data.get("library_id"),
             )
         )
 
@@ -201,9 +237,11 @@ class OnDeckPlexTool(PlexTool):
         self.parameters = vol.Schema(
             {
                 **self._server_fields(),
+                **self._library_fields(),
                 vol.Optional("limit", default=10): LLM_LIMIT,
-                vol.Optional("library"): cv.string,
-                vol.Optional("include_summary", default=True): cv.boolean,
+                vol.Optional(
+                    "include_summary", default=DEFAULT_LLM_INCLUDE_SUMMARY
+                ): cv.boolean,
             }
         )
 
@@ -216,7 +254,8 @@ class OnDeckPlexTool(PlexTool):
             self._client(data).async_on_deck(
                 data.get("limit", 10),
                 data.get("library"),
-                data.get("include_summary", True),
+                data.get("include_summary", DEFAULT_LLM_INCLUDE_SUMMARY),
+                data.get("library_id"),
             )
         )
 
@@ -225,7 +264,10 @@ class MediaDetailsPlexTool(PlexTool):
     """Return metadata for a known Plex item."""
 
     name = "plex_extended__media_details"
-    description = "Get detailed metadata for a Plex item using the rating_key returned by another Plex tool."
+    description = (
+        "Get detailed metadata for a Plex item using the rating_key returned by "
+        "another Plex tool. This includes the full summary."
+    )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
@@ -253,7 +295,9 @@ class ListLibrariesPlexTool(PlexTool):
     """List Plex libraries."""
 
     name = "plex_extended__list_libraries"
-    description = "List available Plex library names and media types."
+    description = (
+        "List available Plex libraries including stable library IDs and media types."
+    )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
@@ -271,7 +315,9 @@ class ListUsersPlexTool(PlexTool):
     """List Plex users."""
 
     name = "plex_extended__list_users"
-    description = "List Plex users that can be used to filter watch history."
+    description = (
+        "List Plex users including stable user IDs for exact watch-history filtering."
+    )
 
     def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
@@ -334,6 +380,9 @@ def async_get_tools(
         prompt=(
             "Use Plex Extended tools for questions about the user's Plex library, "
             "watch history, recently added media, Continue Watching, or On Deck. "
-            "Search results are limited to media actually present in the configured Plex library."
+            "Search/list results are intentionally compact and omit summaries by "
+            "default; call media_details for a selected item when detailed metadata "
+            "or its summary is needed. Search results only include media actually "
+            "present in the configured Plex library."
         ),
     )
