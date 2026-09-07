@@ -2,7 +2,7 @@
 
 Plex Extended is a Home Assistant custom integration that exposes Plex as a queryable media library rather than only as a media player.
 
-It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for library search, recently added media, watch history, Continue Watching, On Deck, metadata, libraries, and users.
+It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, structured library discovery, recently added media, watch history, Continue Watching, On Deck, metadata, libraries, and users.
 
 ## Highlights
 
@@ -12,6 +12,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Uses its own Plex client identity and can coexist with Home Assistant's built-in Plex integration.
 - Exposes query results as **response data**, avoiding huge list-like sensor attributes.
 - Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.
+- Supports fuzzy title search and typed advanced library filtering.
 - Supports multiple Plex servers.
 - Supports stable Plex library/user IDs as well as convenient names.
 - Never returns Plex tokens, tokenized URLs, or local media file paths in action/tool results.
@@ -56,7 +57,7 @@ All Plex Extended actions return response data and can therefore be used with `r
 
 ### `plex_extended.search`
 
-Search the user's Plex library. Plex's hub search provides partial/fuzzy matching and contextual relevance ordering.
+Search the user's Plex library by title/name. Plex's hub search provides partial/fuzzy matching and contextual relevance ordering.
 
 ```yaml
 action: plex_extended.search
@@ -97,6 +98,50 @@ results:
       - Science Fiction
     summary: "..."
 ```
+
+### `plex_extended.query_library`
+
+Run a structured media query rather than a fuzzy title search. This is intended for discovery, filtering, recommendations, and LLM questions such as "find an unwatched 4K horror movie from the 1980s under two hours".
+
+```yaml
+action: plex_extended.query_library
+data:
+  media_type: movie
+  genres:
+    - Horror
+  year_min: 1980
+  year_max: 1989
+  watched_state: unwatched
+  duration_min_minutes: 90
+  duration_max_minutes: 120
+  resolutions:
+    - 4k
+  hdr: hdr
+  audience_rating_min: 7
+  sort_by: audience_rating
+  sort_order: desc
+  limit: 10
+response_variable: plex_results
+```
+
+Supported typed criteria include:
+
+- partial title
+- genre (match any) and `genres_all` (require all)
+- actor, director, collection, content rating, and studio
+- exact year, inclusive year range, and decade
+- Plex-native `watched`, `unwatched`, and `in_progress` states
+- resolution and HDR/SDR
+- critic, audience, and user rating ranges
+- inclusive minimum/maximum runtime in minutes
+- added-date and last-viewed-date before/after filters, including Plex relative values such as `30d`
+- sorting by title, year, added date, last viewed date, ratings, runtime, or resolution
+
+Most categorical filters accept either one string or a YAML list. Multiple values within fields such as `genres`, `actors`, or `directors` use Plex's OR semantics; `genres_all` provides Plex's AND semantics for genres.
+
+`media_type` is required and can be `movie`, `show`, `season`, `episode`, `artist`, `album`, or `track`. If neither `library` nor `library_id` is supplied, Plex Extended automatically selects the library only when exactly one compatible library exists. It refuses to guess if, for example, the server contains multiple movie libraries.
+
+The action deliberately exposes a curated typed interface rather than arbitrary Plex filter/operator dictionaries. This keeps automation validation and native LLM tool calling predictable while still using Plex's own filtering engine.
 
 ### `plex_extended.recently_added`
 
@@ -149,6 +194,7 @@ Tests the configured Plex connection and returns basic server identity informati
 Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/llm.py`. When Plex Extended is loaded, it contributes these tools to the built-in **Assist** LLM API:
 
 - `plex_extended__search`
+- `plex_extended__query_library`
 - `plex_extended__recently_added`
 - `plex_extended__recently_watched`
 - `plex_extended__continue_watching`
@@ -160,12 +206,17 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 A compatible conversation integration can therefore answer questions such as:
 
 - "Do I have Alien on Plex?"
+- "Find an unwatched horror movie from the 1980s around 90 to 120 minutes."
+- "What are my highest-rated 4K science-fiction movies?"
+- "Which Christopher Nolan films do I have that I haven't watched?"
 - "What movies were added recently?"
 - "What did I watch last night?"
 - "Give me my Continue Watching list."
 - "Show me the technical details for that movie."
 
-LLM search/list tools omit summaries by default so a broad query does not spend tokens returning many full plot descriptions. The intended pattern is a compact search/list result followed by `plex_extended__media_details` for whichever item actually needs its full summary or technical metadata. The LLM can still explicitly request summaries when useful.
+The LLM prompt distinguishes `search` (title/name lookup) from `query_library` (structured filtering and recommendations), so the model does not need to retrieve a broad title search and filter it itself.
+
+LLM search/list/query tools omit summaries by default so a broad query does not spend tokens returning many full plot descriptions. The intended pattern is a compact result followed by `plex_extended__media_details` for whichever item actually needs its full summary or technical metadata. The LLM can still explicitly request summaries when useful.
 
 LLM tool result limits are capped at 25. Regular Home Assistant actions allow up to 50 results and continue to include summaries by default for backwards compatibility.
 
@@ -189,20 +240,20 @@ Plex Extended never receives or stores the user's Plex password. If Plex later r
 
 ## Design
 
-The integration has one underlying query implementation in `client.py`:
+Plex Extended keeps the Home Assistant action and native LLM layers as thin interfaces over shared query implementations:
 
 ```text
 Plex Media Server
        │
        ▼
-PlexExtendedClient
+PlexExtendedClient + typed library query backend
        │
        ├── Home Assistant response-data actions
        │
        └── Home Assistant native LLM tools
 ```
 
-The action and LLM layers are intentionally thin wrappers over the same client methods, preventing the behavior of the two interfaces from drifting apart.
+This prevents the behavior of the action and LLM interfaces from drifting apart.
 
 ## Relationship to Home Assistant's Plex integration
 
