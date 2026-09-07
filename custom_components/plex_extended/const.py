@@ -29,6 +29,8 @@ HISTORY_PAGE_SIZE: Final = 100
 DEFAULT_SEARCH_TYPES: Final = ["movie", "show"]
 DEFAULT_LLM_INCLUDE_SUMMARY: Final = False
 RECENT_TV_GROUPINGS: Final = ("none", "show", "season")
+ACTIVE_STREAM_STATES: Final = ("playing", "paused", "buffering")
+ACTIVE_STREAM_LOCALITIES: Final = ("any", "local", "remote")
 SEARCH_TYPES: Final = (
     "movie",
     "show",
@@ -81,6 +83,7 @@ SERVICE_RECENTLY_WATCHED: Final = "recently_watched"
 SERVICE_CONTINUE_WATCHING: Final = "continue_watching"
 SERVICE_ON_DECK: Final = "on_deck"
 SERVICE_MEDIA_DETAILS: Final = "media_details"
+SERVICE_ACTIVE_STREAMS: Final = "active_streams"
 SERVICE_MARK_WATCHED: Final = "mark_watched"
 SERVICE_MARK_UNWATCHED: Final = "mark_unwatched"
 SERVICE_LIST_COLLECTIONS: Final = "list_collections"

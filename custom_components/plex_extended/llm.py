@@ -10,6 +10,7 @@ from homeassistant.components.llm import LLMTools
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.llm import LLMContext
 
+from .active_streams_llm import ActiveStreamsPlexTool
 from .client import PlexExtendedClient
 from .const import CONF_ALLOW_LLM_MUTATIONS
 from .llm_tools import (
@@ -28,6 +29,11 @@ _MUTATION_PROMPT = (
     "explicitly asks to change watch state, first resolve an exact local rating_key with "
     "a read tool, and never invent a rating_key. A show/season mutation also affects its "
     "child episodes."
+)
+_ACTIVE_STREAMS_PROMPT = (
+    " Use active_streams for questions about what is playing on Plex right now, who is "
+    "currently using Plex, player/playback state, progress, local versus remote playback, "
+    "or whether a current session is direct play, direct stream, or transcoding."
 )
 
 
@@ -86,6 +92,7 @@ def async_get_tools(
     }
 
     tools = [tool for tool in result.tools if tool.name not in _MUTATION_TOOL_NAMES]
+    tools.append(ActiveStreamsPlexTool(clients))
     if mutation_clients:
         force_server_selector = len(clients) > 1
         tools.extend(
@@ -104,5 +111,6 @@ def async_get_tools(
     prompt = result.prompt
     if not mutation_clients and prompt:
         prompt = prompt.replace(_MUTATION_PROMPT, "")
+    prompt = f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}"
 
     return LLMTools(tools=tools, prompt=prompt)
