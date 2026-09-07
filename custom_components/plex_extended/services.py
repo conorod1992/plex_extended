@@ -23,6 +23,7 @@ from .const import (
     QUERY_SORT_FIELDS,
     QUERY_SORT_ORDERS,
     QUERY_WATCH_STATES,
+    RECENT_TV_GROUPINGS,
     SEARCH_TYPES,
     SERVICE_CONTINUE_WATCHING,
     SERVICE_LIST_LIBRARIES,
@@ -37,12 +38,11 @@ from .const import (
     SERVICE_WATCH_STATUS,
 )
 from .library_query import async_query_library
+from .recent_media import async_recently_added, async_recently_watched
 from .user_context import (
     async_continue_watching_for_context,
     async_media_details_for_context,
     async_on_deck_for_context,
-    async_recently_added_for_context,
-    async_recently_watched_for_context,
     async_search_for_context,
 )
 from .viewing_progress import async_watch_status
@@ -56,6 +56,7 @@ TEXT_LIST_SCHEMA = vol.All(
 YEAR_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=0, max=9999))
 RATING_SCHEMA = vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
 DURATION_SCHEMA = vol.All(vol.Coerce(float), vol.Range(min=0))
+WINDOW_DAYS_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=3650))
 
 TARGET_SCHEMA = {
     vol.Optional(CONF_CONFIG_ENTRY_ID): cv.string,
@@ -67,6 +68,11 @@ LIBRARY_SCHEMA = {
 USER_SCHEMA = {
     vol.Optional("user"): cv.string,
     vol.Optional("user_id"): cv.string,
+}
+WINDOW_SCHEMA = {
+    vol.Optional("since"): vol.All(cv.string, vol.Length(min=1)),
+    vol.Optional("before"): vol.All(cv.string, vol.Length(min=1)),
+    vol.Optional("within_days"): WINDOW_DAYS_SCHEMA,
 }
 
 SEARCH_SCHEMA = vol.Schema(
@@ -142,8 +148,10 @@ RECENT_SCHEMA = vol.Schema(
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
         **USER_SCHEMA,
+        **WINDOW_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
         vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
+        vol.Optional("group_tv_by", default="none"): vol.In(RECENT_TV_GROUPINGS),
         vol.Optional("include_summary", default=True): cv.boolean,
     }
 )
@@ -153,6 +161,7 @@ HISTORY_SCHEMA = vol.Schema(
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
         **USER_SCHEMA,
+        **WINDOW_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
         vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
@@ -256,16 +265,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     async def handle_recently_added(call: ServiceCall) -> ServiceResponse:
         return await _translate_errors(
-            async_recently_added_for_context(
-                _client_for_call(hass, call), _criteria(call)
-            )
+            async_recently_added(_client_for_call(hass, call), _criteria(call))
         )
 
     async def handle_recently_watched(call: ServiceCall) -> ServiceResponse:
         return await _translate_errors(
-            async_recently_watched_for_context(
-                _client_for_call(hass, call), _criteria(call)
-            )
+            async_recently_watched(_client_for_call(hass, call), _criteria(call))
         )
 
     async def handle_continue_watching(call: ServiceCall) -> ServiceResponse:
