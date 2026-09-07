@@ -13,7 +13,9 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Exposes query results as **response data**, avoiding huge list-like sensor attributes.
 - Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.
 - Supports multiple Plex servers.
+- Supports stable Plex library/user IDs as well as convenient names.
 - Never returns Plex tokens, tokenized URLs, or local media file paths in action/tool results.
+- Provides privacy-safe Home Assistant diagnostics.
 
 ## Installation
 
@@ -54,7 +56,7 @@ All Plex Extended actions return response data and can therefore be used with `r
 
 ### `plex_extended.search`
 
-Search the user's Plex library. Plex's hub search provides partial/fuzzy matching.
+Search the user's Plex library. Plex's hub search provides partial/fuzzy matching and contextual relevance ordering.
 
 ```yaml
 action: plex_extended.search
@@ -69,7 +71,11 @@ data:
 response_variable: plex_results
 ```
 
-Optional fields include `library` and `config_entry_id`. If only one Plex Extended server is loaded, `config_entry_id` can be omitted.
+For mixed media types, Plex Extended performs a single Plex hub search and filters the returned media afterwards. This preserves Plex's own cross-category relevance ordering rather than giving whichever media type is listed first priority over the result limit.
+
+Optional fields include `library`, `library_id`, and `config_entry_id`. If only one Plex Extended server is loaded, `config_entry_id` can be omitted.
+
+`library_id` is the stable Plex library section ID returned by `plex_extended.list_libraries`. Names remain convenient, but if two Plex sections share the same name Plex Extended will refuse to silently choose one and will ask for `library_id` instead.
 
 Typical response:
 
@@ -83,6 +89,7 @@ results:
     title: Alien
     year: 1979
     library: Movies
+    library_id: 1
     duration_ms: 7020000
     watched: true
     genres:
@@ -93,19 +100,23 @@ results:
 
 ### `plex_extended.recently_added`
 
-Returns recently added media. Supports `limit`, `library`, `media_types`, and `include_summary`.
+Returns recently added media. Supports `limit`, `library`, `library_id`, `media_types`, and `include_summary`.
 
 ### `plex_extended.recently_watched`
 
-Returns Plex play history sorted newest first. Supports filtering by Plex user name, library, media type, and result limit. When no user is specified, history visible to the configured server token is returned.
+Returns Plex play history sorted newest first. Supports filtering by Plex user name/ID, library name/ID, media type, and result limit. When no user is specified, history visible to the configured server token is returned.
+
+Filtered history is paged until Plex Extended has filled the requested result count or Plex history is exhausted. For example, asking for 10 movies will not stop early merely because the newest history pages are dominated by TV episodes.
+
+`user_id` is the stable Plex account ID returned by `plex_extended.list_users`. As with libraries, names are supported for convenience but IDs provide exact addressing.
 
 ### `plex_extended.continue_watching`
 
-Returns the Plex Continue Watching hub, optionally limited to a library.
+Returns the Plex Continue Watching hub, optionally limited by `library` or `library_id`.
 
 ### `plex_extended.on_deck`
 
-Returns Plex On Deck items, optionally limited to a library.
+Returns Plex On Deck items, optionally limited by `library` or `library_id`.
 
 ### `plex_extended.media_details`
 
@@ -123,11 +134,11 @@ Technical metadata can include container, bitrate, resolution, video/audio codec
 
 ### `plex_extended.list_libraries`
 
-Returns available Plex library names, IDs, types, and UUIDs.
+Returns available Plex library names, stable IDs, types, and UUIDs.
 
 ### `plex_extended.list_users`
 
-Returns Plex system-account IDs and names for watch-history filtering.
+Returns Plex system-account IDs and names for exact watch-history filtering.
 
 ### `plex_extended.test_connection`
 
@@ -151,11 +162,18 @@ A compatible conversation integration can therefore answer questions such as:
 - "Do I have Alien on Plex?"
 - "What movies were added recently?"
 - "What did I watch last night?"
-- "What episode am I up to?"
 - "Give me my Continue Watching list."
 - "Show me the technical details for that movie."
 
-LLM tool result limits are capped at 25 to keep tool responses reasonably token-efficient. Regular Home Assistant actions allow up to 50 results.
+LLM search/list tools omit summaries by default so a broad query does not spend tokens returning many full plot descriptions. The intended pattern is a compact search/list result followed by `plex_extended__media_details` for whichever item actually needs its full summary or technical metadata. The LLM can still explicitly request summaries when useful.
+
+LLM tool result limits are capped at 25. Regular Home Assistant actions allow up to 50 results and continue to include summaries by default for backwards compatibility.
+
+## Diagnostics
+
+Home Assistant can download diagnostics from the Plex Extended config-entry menu. Diagnostics include useful support information such as Plex server version/platform, connection scheme, enabled capabilities, and library section IDs/types.
+
+Plex tokens, server URL/host, Plex client identifier, server machine identifier, server name, library names, and library UUIDs are deliberately redacted or omitted.
 
 ## Authentication
 
@@ -203,4 +221,4 @@ Version `0.1.0` focuses on read/query functionality. It deliberately does not ye
 
 ## Development and validation
 
-The repository validation workflow runs Python compilation and Home Assistant `hassfest` on every push and pull request. HACS validation is automatically enabled when the repository is public; the current HACS action cannot fetch private-repository manifests through its raw-content validation path.
+The repository validation workflow runs Python compilation, focused unit tests, and Home Assistant `hassfest` on every push and pull request. HACS validation is automatically enabled when the repository is public; the current HACS action cannot fetch private-repository manifests through its raw-content validation path.

@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Callable, Iterable
 from functools import partial
 from typing import Any, TypeVar
+from urllib.parse import urlencode
 
 from plexapi.exceptions import BadRequest, NotFound, Unauthorized
 from plexapi.server import PlexServer
@@ -19,6 +20,7 @@ from .const import (
     CONF_SERVER_TOKEN,
     DEFAULT_LIMIT,
     DEFAULT_SEARCH_TYPES,
+    HISTORY_PAGE_SIZE,
     MAX_LIMIT,
 )
 
@@ -62,11 +64,7 @@ def _tag_names(values: Iterable[Any] | None) -> list[str]:
 class PlexExtendedClient:
     """Thread-safe async wrapper around the synchronous PlexAPI client."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the client."""
         self.hass = hass
         self.entry = entry
@@ -88,11 +86,22 @@ class PlexExtendedClient:
                     self.entry.data[CONF_SERVER_TOKEN],
                 )
         except Unauthorized as err:
-            raise PlexExtendedAuthenticationError("Plex rejected the configured token") from err
+            raise PlexExtendedAuthenticationError(
+                "Plex rejected the configured token"
+            ) from err
         except RequestException as err:
-            raise PlexExtendedConnectionError(f"Unable to connect to Plex: {err}") from err
+            raise PlexExtendedConnectionError(
+                f"Unable to connect to Plex: {err}"
+            ) from err
         except Exception as err:
-            raise PlexExtendedConnectionError(f"Unable to connect to Plex: {err}") from err
+            raise PlexExtendedConnectionError(
+                f"Unable to connect to Plex: {err}"
+            ) from err
+
+    async def async_close(self) -> None:
+        """Release the connected Plex server object."""
+        async with self._lock:
+            self._server = None
 
     async def _async_run(
         self,
@@ -108,9 +117,13 @@ class PlexExtendedClient:
                 )
         except Unauthorized as err:
             self.entry.async_start_reauth(self.hass)
-            raise PlexExtendedAuthenticationError("Plex authorization is no longer valid") from err
+            raise PlexExtendedAuthenticationError(
+                "Plex authorization is no longer valid"
+            ) from err
         except RequestException as err:
-            raise PlexExtendedConnectionError(f"Unable to communicate with Plex: {err}") from err
+            raise PlexExtendedConnectionError(
+                f"Unable to communicate with Plex: {err}"
+            ) from err
         except (BadRequest, NotFound) as err:
             raise PlexExtendedError(str(err)) from err
         except PlexExtendedError:
@@ -124,19 +137,48 @@ class PlexExtendedClient:
             raise PlexExtendedConnectionError("Plex client is not connected")
         return self._server
 
-    def _section(self, library: str | None) -> Any | None:
-        """Find a library section case-insensitively."""
-        if not library:
+    def _section(
+        self,
+        library: str | None = None,
+        library_id: str | int | None = None,
+    ) -> Any | None:
+        """Resolve a library by exact ID or unambiguous case-insensitive name."""
+        if not library and library_id is None:
             return None
-        server = self._require_server()
+
+        sections = self._require_server().library.sections()
+
+        if library_id is not None:
+            wanted_id = str(library_id)
+            matches = [section for section in sections if str(section.key) == wanted_id]
+            if not matches:
+                raise PlexExtendedError(f"Plex library ID not found: {library_id}")
+            section = matches[0]
+            if library and section.title.casefold() != library.casefold():
+                raise PlexExtendedError(
+                    f"Plex library ID {library_id} is '{section.title}', not '{library}'"
+                )
+            return section
+
+        assert library is not None
         wanted = library.casefold()
-        for section in server.library.sections():
-            if section.title.casefold() == wanted:
-                return section
-        raise PlexExtendedError(f"Plex library not found: {library}")
+        matches = [
+            section for section in sections if section.title.casefold() == wanted
+        ]
+        if not matches:
+            raise PlexExtendedError(f"Plex library not found: {library}")
+        if len(matches) > 1:
+            ids = ", ".join(str(section.key) for section in matches)
+            raise PlexExtendedError(
+                f"Multiple Plex libraries are named '{library}'. Use library_id instead "
+                f"(matching IDs: {ids})"
+            )
+        return matches[0]
 
     @staticmethod
-    def _normalize_types(search_types: list[str] | tuple[str, ...] | None) -> list[str]:
+    def _normalize_types(
+        search_types: list[str] | tuple[str, ...] | None,
+    ) -> list[str]:
         """Normalize requested media types."""
         values = list(search_types or DEFAULT_SEARCH_TYPES)
         return list(dict.fromkeys(values))
@@ -203,9 +245,11 @@ class PlexExtendedClient:
             "parent_title": getattr(item, "parentTitle", None),
             "grandparent_title": getattr(item, "grandparentTitle", None),
             "season": getattr(item, "parentIndex", None),
-            "episode": getattr(item, "index", None)
-            if getattr(item, "type", None) == "episode"
-            else None,
+            "episode": (
+                getattr(item, "index", None)
+                if getattr(item, "type", None) == "episode"
+                else None
+            ),
             "duration_ms": duration,
             "view_offset_ms": view_offset,
             "progress_percent": progress,
@@ -223,13 +267,21 @@ class PlexExtendedClient:
             "directors": _tag_names(getattr(item, "directors", None)),
             "thumb": getattr(item, "thumb", None),
             "account_id": account_id,
-            "user": users.get(account_id) if users and account_id is not None else None,
+            "user": (
+                users.get(int(account_id))
+                if users and account_id is not None
+                else None
+            ),
         }
         if include_summary:
             data["summary"] = getattr(item, "summary", None)
         if include_technical:
             data["media"] = self._serialize_technical(item)
-        return {key: value for key, value in data.items() if value not in (None, [], "")}
+        return {
+            key: value
+            for key, value in data.items()
+            if value not in (None, [], "")
+        }
 
     def _search(
         self,
@@ -239,48 +291,62 @@ class PlexExtendedClient:
         library: str | None,
         include_summary: bool,
         include_technical: bool,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
-        """Search Plex using its hub search, preserving Plex relevance ordering."""
+        """Search Plex while preserving Plex's cross-category relevance ordering."""
         server = self._require_server()
-        section = self._section(library)
+        section = self._section(library, library_id)
         section_id = section.key if section else None
         media_types = self._normalize_types(search_types)
+        requested_types = set(media_types)
         max_results = self._normalize_limit(limit)
+
+        # A single-type query can use Plex's native type filter. For mixed queries,
+        # request the hub search once and filter the flattened results afterwards.
+        # This preserves Plex's own relevance ordering instead of biasing whichever
+        # media type happened to be listed first by the caller.
+        mediatype = media_types[0] if len(media_types) == 1 else None
+        matches = server.search(
+            query,
+            mediatype=mediatype,
+            limit=max_results,
+            sectionId=section_id,
+        )
 
         results: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
-        for media_type in media_types:
-            matches = server.search(
-                query,
-                mediatype=media_type,
-                limit=max_results,
-                sectionId=section_id,
-            )
-            for match in matches:
-                # Plex hub search can include online/external media. Plex Extended is
-                # deliberately a library search, so only return server library items.
-                library_id = getattr(match, "librarySectionID", None)
-                rating_key = getattr(match, "ratingKey", None)
-                if library_id is None or rating_key is None:
-                    continue
-                identity = (str(getattr(match, "type", media_type)), str(rating_key))
-                if identity in seen:
-                    continue
-                seen.add(identity)
-                if include_technical:
-                    try:
-                        match = server.fetchItem(rating_key)
-                    except Exception:
-                        pass
-                results.append(
-                    self._serialize_item(
-                        match,
-                        include_summary=include_summary,
-                        include_technical=include_technical,
-                    )
+        for match in matches:
+            match_type = str(getattr(match, "type", ""))
+            if match_type not in requested_types:
+                continue
+
+            # Plex hub search can include online/external media. Plex Extended is
+            # deliberately a library search, so only return server library items.
+            match_library_id = getattr(match, "librarySectionID", None)
+            rating_key = getattr(match, "ratingKey", None)
+            if match_library_id is None or rating_key is None:
+                continue
+            if section_id is not None and str(match_library_id) != str(section_id):
+                continue
+
+            identity = (match_type, str(rating_key))
+            if identity in seen:
+                continue
+            seen.add(identity)
+
+            if include_technical:
+                try:
+                    match = server.fetchItem(rating_key)
+                except Exception:
+                    pass
+
+            results.append(
+                self._serialize_item(
+                    match,
+                    include_summary=include_summary,
+                    include_technical=include_technical,
                 )
-                if len(results) >= max_results:
-                    break
+            )
             if len(results) >= max_results:
                 break
 
@@ -299,6 +365,7 @@ class PlexExtendedClient:
         library: str | None = None,
         include_summary: bool = True,
         include_technical: bool = False,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Search Plex."""
         return await self._async_run(
@@ -309,6 +376,7 @@ class PlexExtendedClient:
             library,
             include_summary,
             include_technical,
+            library_id,
         )
 
     def _recently_added(
@@ -317,12 +385,13 @@ class PlexExtendedClient:
         library: str | None,
         media_types: list[str] | None,
         include_summary: bool,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return recently added media."""
         server = self._require_server()
         max_results = self._normalize_limit(limit)
         types = set(media_types or [])
-        section = self._section(library)
+        section = self._section(library, library_id)
         if section:
             items = section.recentlyAdded(maxresults=MAX_LIMIT)
         else:
@@ -345,10 +414,16 @@ class PlexExtendedClient:
         library: str | None = None,
         media_types: list[str] | None = None,
         include_summary: bool = True,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return recently added media."""
         return await self._async_run(
-            self._recently_added, limit, library, media_types, include_summary
+            self._recently_added,
+            limit,
+            library,
+            media_types,
+            include_summary,
+            library_id,
         )
 
     def _user_map(self) -> dict[int, str]:
@@ -358,6 +433,55 @@ class PlexExtendedClient:
             for account in self._require_server().systemAccounts()
         }
 
+    @staticmethod
+    def _resolve_user_id(
+        users: dict[int, str],
+        user: str | None,
+        user_id: str | int | None,
+    ) -> int | None:
+        """Resolve a Plex account by exact ID or unambiguous case-insensitive name."""
+        if user_id is not None:
+            try:
+                account_id = int(user_id)
+            except (TypeError, ValueError) as err:
+                raise PlexExtendedError(f"Invalid Plex user ID: {user_id}") from err
+            if account_id not in users:
+                raise PlexExtendedError(f"Plex user ID not found: {user_id}")
+            if user and users[account_id].casefold() != user.casefold():
+                raise PlexExtendedError(
+                    f"Plex user ID {user_id} is '{users[account_id]}', not '{user}'"
+                )
+            return account_id
+
+        if not user:
+            return None
+
+        wanted = user.casefold()
+        matches = [
+            account_id
+            for account_id, name in users.items()
+            if name.casefold() == wanted
+        ]
+        if not matches:
+            raise PlexExtendedError(f"Plex user not found: {user}")
+        if len(matches) > 1:
+            ids = ", ".join(str(account_id) for account_id in matches)
+            raise PlexExtendedError(
+                f"Multiple Plex users are named '{user}'. Use user_id instead "
+                f"(matching IDs: {ids})"
+            )
+        return matches[0]
+
+    @staticmethod
+    def _history_key(account_id: int | None, section_id: Any | None) -> str:
+        """Build the same watched-history endpoint used by PlexAPI.history()."""
+        args: list[tuple[str, str]] = [("sort", "viewedAt:desc")]
+        if account_id is not None:
+            args.append(("accountID", str(account_id)))
+        if section_id is not None:
+            args.append(("librarySectionID", str(section_id)))
+        return f"/status/sessions/history/all?{urlencode(args)}"
+
     def _recently_watched(
         self,
         limit: int,
@@ -365,41 +489,57 @@ class PlexExtendedClient:
         user: str | None,
         media_types: list[str] | None,
         include_summary: bool,
+        library_id: str | int | None = None,
+        user_id: str | int | None = None,
     ) -> dict[str, Any]:
-        """Return Plex watch history."""
+        """Return Plex watch history, paging until requested filtered results are filled."""
         server = self._require_server()
         max_results = self._normalize_limit(limit)
-        section = self._section(library)
+        section = self._section(library, library_id)
         users = self._user_map()
-        account_id: int | None = None
-        if user:
-            wanted = user.casefold()
-            account_id = next(
-                (key for key, name in users.items() if name.casefold() == wanted), None
-            )
-            if account_id is None:
-                raise PlexExtendedError(f"Plex user not found: {user}")
-
+        account_id = self._resolve_user_id(users, user, user_id)
         types = set(media_types or [])
-        fetch_count = min(MAX_LIMIT, max_results * 5) if types else max_results
-        items = server.history(
-            maxresults=fetch_count,
-            accountID=account_id,
-            librarySectionID=section.key if section else None,
+
+        history_key = self._history_key(
+            account_id,
+            section.key if section else None,
         )
-        if types:
-            items = [item for item in items if getattr(item, "type", None) in types]
-        items = list(items)[:max_results]
+        matched: list[Any] = []
+        offset = 0
+
+        while len(matched) < max_results:
+            page = list(
+                server.fetchItems(
+                    history_key,
+                    container_start=offset,
+                    container_size=HISTORY_PAGE_SIZE,
+                    maxresults=HISTORY_PAGE_SIZE,
+                )
+            )
+            if not page:
+                break
+
+            for item in page:
+                if types and getattr(item, "type", None) not in types:
+                    continue
+                matched.append(item)
+                if len(matched) >= max_results:
+                    break
+
+            if len(page) < HISTORY_PAGE_SIZE:
+                break
+            offset += HISTORY_PAGE_SIZE
+
         return {
             "success": True,
-            "count": len(items),
+            "count": len(matched),
             "results": [
                 self._serialize_item(
                     item,
                     include_summary=include_summary,
                     users=users,
                 )
-                for item in items
+                for item in matched
             ],
         }
 
@@ -410,6 +550,8 @@ class PlexExtendedClient:
         user: str | None = None,
         media_types: list[str] | None = None,
         include_summary: bool = True,
+        library_id: str | int | None = None,
+        user_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return watch history."""
         return await self._async_run(
@@ -419,14 +561,20 @@ class PlexExtendedClient:
             user,
             media_types,
             include_summary,
+            library_id,
+            user_id,
         )
 
     def _continue_watching(
-        self, limit: int, library: str | None, include_summary: bool
+        self,
+        limit: int,
+        library: str | None,
+        include_summary: bool,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return Continue Watching items."""
         max_results = self._normalize_limit(limit)
-        section = self._section(library)
+        section = self._section(library, library_id)
         items = (
             section.continueWatching()
             if section
@@ -447,18 +595,27 @@ class PlexExtendedClient:
         limit: int = DEFAULT_LIMIT,
         library: str | None = None,
         include_summary: bool = True,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return Continue Watching items."""
         return await self._async_run(
-            self._continue_watching, limit, library, include_summary
+            self._continue_watching,
+            limit,
+            library,
+            include_summary,
+            library_id,
         )
 
     def _on_deck(
-        self, limit: int, library: str | None, include_summary: bool
+        self,
+        limit: int,
+        library: str | None,
+        include_summary: bool,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return On Deck items."""
         max_results = self._normalize_limit(limit)
-        section = self._section(library)
+        section = self._section(library, library_id)
         items = section.onDeck() if section else self._require_server().library.onDeck()
         items = list(items)[:max_results]
         return {
@@ -475,9 +632,16 @@ class PlexExtendedClient:
         limit: int = DEFAULT_LIMIT,
         library: str | None = None,
         include_summary: bool = True,
+        library_id: str | int | None = None,
     ) -> dict[str, Any]:
         """Return On Deck items."""
-        return await self._async_run(self._on_deck, limit, library, include_summary)
+        return await self._async_run(
+            self._on_deck,
+            limit,
+            library,
+            include_summary,
+            library_id,
+        )
 
     def _media_details(
         self, rating_key: str, include_technical: bool
@@ -498,7 +662,9 @@ class PlexExtendedClient:
     ) -> dict[str, Any]:
         """Return details for a Plex item."""
         return await self._async_run(
-            self._media_details, rating_key, include_technical
+            self._media_details,
+            rating_key,
+            include_technical,
         )
 
     def _list_libraries(self) -> dict[str, Any]:
