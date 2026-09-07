@@ -39,8 +39,11 @@ from .const import (
 from .library_query import async_query_library
 from .user_context import (
     async_continue_watching_for_context,
+    async_media_details_for_context,
     async_on_deck_for_context,
+    async_recently_added_for_context,
     async_recently_watched_for_context,
+    async_search_for_context,
 )
 from .viewing_progress import async_watch_status
 
@@ -70,6 +73,7 @@ SEARCH_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
         vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("search_types", default=DEFAULT_SEARCH_TYPES): MEDIA_TYPES_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
@@ -137,6 +141,7 @@ RECENT_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         **LIBRARY_SCHEMA,
+        **USER_SCHEMA,
         vol.Optional("limit", default=DEFAULT_LIMIT): LIMIT_SCHEMA,
         vol.Optional("media_types"): MEDIA_TYPES_SCHEMA,
         vol.Optional("include_summary", default=True): cv.boolean,
@@ -167,6 +172,7 @@ BROWSE_SCHEMA = vol.Schema(
 DETAILS_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
+        **USER_SCHEMA,
         vol.Required("rating_key"): cv.string,
         vol.Optional("include_technical", default=True): cv.boolean,
     }
@@ -234,17 +240,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     """Register Plex Extended response-data actions."""
 
     async def handle_search(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
         return await _translate_errors(
-            client.async_search(
-                call.data["query"],
-                call.data.get("search_types"),
-                call.data.get("limit", DEFAULT_LIMIT),
-                call.data.get("library"),
-                call.data.get("include_summary", True),
-                call.data.get("include_technical", False),
-                call.data.get("library_id"),
-            )
+            async_search_for_context(_client_for_call(hass, call), _criteria(call))
         )
 
     async def handle_query_library(call: ServiceCall) -> ServiceResponse:
@@ -258,14 +255,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_recently_added(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
         return await _translate_errors(
-            client.async_recently_added(
-                call.data.get("limit", DEFAULT_LIMIT),
-                call.data.get("library"),
-                call.data.get("media_types"),
-                call.data.get("include_summary", True),
-                call.data.get("library_id"),
+            async_recently_added_for_context(
+                _client_for_call(hass, call), _criteria(call)
             )
         )
 
@@ -289,11 +281,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         )
 
     async def handle_media_details(call: ServiceCall) -> ServiceResponse:
-        client = _client_for_call(hass, call)
         return await _translate_errors(
-            client.async_media_details(
-                call.data["rating_key"],
-                call.data.get("include_technical", True),
+            async_media_details_for_context(
+                _client_for_call(hass, call), _criteria(call)
             )
         )
 
