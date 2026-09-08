@@ -30,6 +30,7 @@ from .const import (
     AUTH_CALLBACK_NAME,
     AUTH_CALLBACK_PATH,
     CONF_ALLOW_LLM_MUTATIONS,
+    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_DEFAULT_USER_ID,
@@ -342,6 +343,9 @@ class PlexExtendedOptionsFlow(OptionsFlow):
             allow_llm_mutations = bool(
                 user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)
             )
+            allow_llm_watchlist_mutations = bool(
+                user_input.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)
+            )
             if selected:
                 try:
                     await async_validate_user_context(client, selected)
@@ -356,6 +360,9 @@ class PlexExtendedOptionsFlow(OptionsFlow):
                     options.pop(CONF_DEFAULT_USER_ID, None)
                 options[CONF_ENABLE_LLM_TOOLS] = enable_llm_tools
                 options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations
+                options[CONF_ALLOW_LLM_WATCHLIST_MUTATIONS] = (
+                    allow_llm_watchlist_mutations
+                )
                 return self.async_create_entry(title="", data=options)
         else:
             selected = str(self.config_entry.options.get(CONF_DEFAULT_USER_ID, ""))
@@ -364,6 +371,11 @@ class PlexExtendedOptionsFlow(OptionsFlow):
             )
             allow_llm_mutations = bool(
                 self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)
+            )
+            allow_llm_watchlist_mutations = bool(
+                self.config_entry.options.get(
+                    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False
+                )
             )
 
         if selected not in choices:
@@ -380,6 +392,10 @@ class PlexExtendedOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_ALLOW_LLM_MUTATIONS,
                         default=allow_llm_mutations,
+                    ): cv.boolean,
+                    vol.Required(
+                        CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
+                        default=allow_llm_watchlist_mutations,
                     ): cv.boolean,
                 }
             ),

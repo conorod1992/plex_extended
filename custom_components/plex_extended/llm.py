@@ -12,7 +12,15 @@ from homeassistant.helpers.llm import LLMContext
 
 from .active_streams_llm import ActiveStreamsPlexTool
 from .client import PlexExtendedClient
-from .const import CONF_ALLOW_LLM_MUTATIONS
+from .const import (
+    CONF_ALLOW_LLM_MUTATIONS,
+    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
+)
+from .discover_watchlist_llm import (
+    AddToWatchlistPlexTool,
+    DiscoverSearchPlexTool,
+    RemoveFromWatchlistPlexTool,
+)
 from .library_summary_llm import LibrarySummaryPlexTool
 from .llm_policy import enabled_llm_clients
 from .llm_tools import (
@@ -36,6 +44,17 @@ _ACTIVE_STREAMS_PROMPT = (
     " Use active_streams for questions about what is playing on Plex right now, who is "
     "currently using Plex, player/playback state, progress, local versus remote playback, "
     "or whether a current session is direct play, direct stream, or transcoding."
+)
+_DISCOVER_PROMPT = (
+    " Use discover_search for movies/shows in Plex Discover, especially titles that may "
+    "not exist on the local server. Discover and Watchlist are scoped to the configured "
+    "plex.tv account rather than the household default Plex user."
+)
+_WATCHLIST_MUTATION_PROMPT = (
+    " add_to_watchlist and remove_from_watchlist change the configured plex.tv account: "
+    "use them only for an explicit user request and only with the exact guid and title "
+    "returned by discover_search or other Plex Extended Watchlist data. Never invent or "
+    "modify a Discover guid."
 )
 _LIBRARY_SUMMARY_PROMPT = (
     " Use library_summary instead of query_library when the user wants an exact count, "
@@ -100,6 +119,13 @@ def async_get_tools(
         for label, client in clients.items()
         if bool(client.entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False))
     }
+    watchlist_mutation_clients = {
+        label: client
+        for label, client in clients.items()
+        if bool(
+            client.entry.options.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)
+        )
+    }
 
     tools = [
         type(tool)(clients)
@@ -110,6 +136,7 @@ def async_get_tools(
         [
             ActiveStreamsPlexTool(clients),
             LibrarySummaryPlexTool(clients),
+            DiscoverSearchPlexTool(clients),
         ]
     )
     if mutation_clients:
@@ -127,9 +154,28 @@ def async_get_tools(
             ]
         )
 
+    if watchlist_mutation_clients:
+        force_server_selector = len(clients) > 1
+        tools.extend(
+            [
+                AddToWatchlistPlexTool(
+                    watchlist_mutation_clients,
+                    force_server_selector=force_server_selector,
+                ),
+                RemoveFromWatchlistPlexTool(
+                    watchlist_mutation_clients,
+                    force_server_selector=force_server_selector,
+                ),
+            ]
+        )
+
     prompt = result.prompt
     if not mutation_clients and prompt:
         prompt = prompt.replace(_MUTATION_PROMPT, "")
-    prompt = f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}{_LIBRARY_SUMMARY_PROMPT}"
+    prompt = (
+        f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}{_LIBRARY_SUMMARY_PROMPT}"
+        f"{_DISCOVER_PROMPT}"
+        f"{_WATCHLIST_MUTATION_PROMPT if watchlist_mutation_clients else ''}"
+    )
 
     return LLMTools(tools=tools, prompt=prompt)

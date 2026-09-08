@@ -15,6 +15,7 @@ from .const import (
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_ALLOW_LLM_MUTATIONS,
+    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
     CONF_ENABLE_LLM_TOOLS,
     CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_NAME,
@@ -32,6 +33,7 @@ TO_REDACT = {
 
 FEATURES = [
     "search",
+    "discover_search",
     "query_library",
     "library_summary",
     "watch_status",
@@ -46,6 +48,8 @@ FEATURES = [
     "list_playlists",
     "playlist_items",
     "watchlist",
+    "add_to_watchlist",
+    "remove_from_watchlist",
     "mark_watched",
     "mark_unwatched",
     "list_libraries",
@@ -68,6 +72,9 @@ async def async_get_config_entry_diagnostics(
             ),
             "assist_watch_state_mutations_enabled": bool(
                 entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)
+            ),
+            "assist_watchlist_mutations_enabled": bool(
+                entry.options.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)
             ),
         },
     }
