@@ -7,6 +7,7 @@ from typing import Any
 
 from plexapi.exceptions import Unauthorized
 from plexapi.server import PlexServer
+from requests.exceptions import RequestException
 
 from .client import PlexExtendedClient, PlexExtendedError
 from .const import CONF_DEFAULT_USER_ID, DEFAULT_LIMIT
@@ -82,10 +83,20 @@ def resolve_user_context(
         try:
             server = base_server.switchUser(name)
         except Unauthorized as err:
+            # switchUser() also uses Unauthorized for the legitimate case where
+            # a valid non-owner token is not permitted to impersonate another
+            # household user. Re-check the already-used authenticated account
+            # endpoint: if that now fails, let the raw auth/transport error escape
+            # to PlexExtendedClient._async_run() so Home Assistant can reauth.
+            client._user_map()
             raise PlexExtendedError(
                 f"Plex rejected access for user '{name}'. The configured server account "
                 "must be the server owner to query another user's viewing state."
             ) from err
+        except RequestException:
+            # Preserve transport failures for the central async wrapper, which
+            # translates them to PlexExtendedConnectionError.
+            raise
         except Exception as err:
             raise PlexExtendedError(
                 f"Unable to switch Plex context to user '{name}': {err}"
