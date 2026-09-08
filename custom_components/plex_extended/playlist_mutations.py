@@ -61,7 +61,7 @@ def _assert_regular_playlist(playlist: Any) -> None:
     """Reject smart/radio playlists and incomplete playlist metadata."""
     if bool(getattr(playlist, "smart", False)):
         raise PlexExtendedError("Smart Plex playlists cannot be edited item-by-item")
-    if bool(getattr(playlist, "radio", False))):
+    if bool(getattr(playlist, "radio", False)):
         raise PlexExtendedError("Plex radio playlists cannot be edited item-by-item")
     playlist_type = str(getattr(playlist, "playlistType", "") or "")
     if playlist_type not in {"audio", "video", "photo"}:
