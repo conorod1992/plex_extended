@@ -44,6 +44,14 @@ LIBRARY_SUMMARY_FACETS: Final = (
     "content_rating",
     "studio",
     "collection",
+    "label",
+    "country",
+    "audio_language",
+    "subtitle_language",
+    "video_codec",
+    "audio_codec",
+    "container",
+    "audio_channels",
 )
 SEARCH_TYPES: Final = (
     "movie",

@@ -156,6 +156,59 @@ query_library:
       description: Match any supplied studio. YAML can supply a list.
       selector:
         text:
+    audio_languages:
+      name: Audio languages
+      description: Match any Plex audio language code/name, such as eng or jpn. This is a Plex-native server filter. YAML can supply a list.
+      selector:
+        text:
+    subtitle_languages:
+      name: Subtitle languages
+      description: Match any Plex subtitle language code/name, such as eng. This is a Plex-native server filter. YAML can supply a list.
+      selector:
+        text:
+    labels:
+      name: Labels
+      description: Match any Plex label. YAML can supply a list.
+      selector:
+        text:
+    countries:
+      name: Countries
+      description: Match any Plex country tag. YAML can supply a list.
+      selector:
+        text:
+    duplicates:
+      name: Has duplicate versions
+      description: When true, match Plex duplicate items; when false, exclude duplicates. Leave unset for either.
+      selector:
+        boolean:
+    unmatched:
+      name: Unmatched
+      description: When true, match items Plex has not matched; when false, require matched items. Leave unset for either.
+      selector:
+        boolean:
+    video_codecs:
+      name: Video codecs
+      description: Match any media version whose Plex videoCodec equals one of these values, such as hevc or h264. PlexAPI applies this after the server-native filters. YAML can supply a list.
+      selector:
+        text:
+    audio_codecs:
+      name: Audio codecs
+      description: Match any media version whose Plex audioCodec equals one of these values, such as truehd, eac3 or aac. PlexAPI applies this after the server-native filters. YAML can supply a list.
+      selector:
+        text:
+    containers:
+      name: Containers
+      description: Match any media version container, such as mkv or mp4. PlexAPI applies this after the server-native filters. YAML can supply a list.
+      selector:
+        text:
+    audio_channels:
+      name: Audio channels
+      description: Match any media version with this channel count, such as 2, 6 or 8. YAML can supply a list.
+      selector:
+        number:
+          min: 1
+          max: 32
+          mode: box
     year:
       name: Exact year
       selector:
@@ -422,6 +475,59 @@ library_summary:
       description: Match any supplied studio. YAML can supply a list.
       selector:
         text:
+    audio_languages:
+      name: Audio languages
+      description: Match any Plex audio language code/name, such as eng or jpn. This is a Plex-native server filter. YAML can supply a list.
+      selector:
+        text:
+    subtitle_languages:
+      name: Subtitle languages
+      description: Match any Plex subtitle language code/name, such as eng. This is a Plex-native server filter. YAML can supply a list.
+      selector:
+        text:
+    labels:
+      name: Labels
+      description: Match any Plex label. YAML can supply a list.
+      selector:
+        text:
+    countries:
+      name: Countries
+      description: Match any Plex country tag. YAML can supply a list.
+      selector:
+        text:
+    duplicates:
+      name: Has duplicate versions
+      description: When true, match Plex duplicate items; when false, exclude duplicates. Leave unset for either.
+      selector:
+        boolean:
+    unmatched:
+      name: Unmatched
+      description: When true, match items Plex has not matched; when false, require matched items. Leave unset for either.
+      selector:
+        boolean:
+    video_codecs:
+      name: Video codecs
+      description: Match any media version whose Plex videoCodec equals one of these values, such as hevc or h264. PlexAPI applies this after the server-native filters. YAML can supply a list.
+      selector:
+        text:
+    audio_codecs:
+      name: Audio codecs
+      description: Match any media version whose Plex audioCodec equals one of these values, such as truehd, eac3 or aac. PlexAPI applies this after the server-native filters. YAML can supply a list.
+      selector:
+        text:
+    containers:
+      name: Containers
+      description: Match any media version container, such as mkv or mp4. PlexAPI applies this after the server-native filters. YAML can supply a list.
+      selector:
+        text:
+    audio_channels:
+      name: Audio channels
+      description: Match any media version with this channel count, such as 2, 6 or 8. YAML can supply a list.
+      selector:
+        number:
+          min: 1
+          max: 32
+          mode: box
     year:
       name: Exact year
       selector:
@@ -576,6 +682,14 @@ library_summary:
             - content_rating
             - studio
             - collection
+            - label
+            - country
+            - audio_language
+            - subtitle_language
+            - video_codec
+            - audio_codec
+            - container
+            - audio_channels
     facet_limit:
       name: Facet value limit
       description: Maximum number of values returned for each requested facet, ordered by count.

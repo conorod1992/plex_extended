@@ -348,3 +348,68 @@ def test_missing_total_size_falls_back_to_exact_materialized_count() -> None:
     assert result["count"] == 3
     assert len(server.query_calls) == 1
     assert len(section.search_calls) == 1
+
+
+def test_new_metadata_facets_cover_tags_streams_and_media_versions() -> None:
+    item = SimpleNamespace(
+        labels=[SimpleNamespace(tag="Favourite")],
+        countries=[SimpleNamespace(tag="Ireland")],
+        media=[
+            SimpleNamespace(
+                videoCodec="hevc",
+                audioCodec="truehd",
+                container="mkv",
+                audioChannels=8,
+                videoResolution="4k",
+                parts=[
+                    SimpleNamespace(
+                        streams=[
+                            SimpleNamespace(streamType=2, languageCode="eng", language="English"),
+                            SimpleNamespace(streamType=3, languageCode="spa", language="Spanish"),
+                        ]
+                    )
+                ],
+            ),
+            SimpleNamespace(
+                videoCodec="h264",
+                audioCodec="aac",
+                container="mp4",
+                audioChannels=2,
+                videoResolution="1080",
+                parts=[],
+            ),
+        ],
+    )
+
+    expected = {
+        "label": ["Favourite"],
+        "country": ["Ireland"],
+        "audio_language": ["eng"],
+        "subtitle_language": ["spa"],
+        "video_codec": ["hevc", "h264"],
+        "audio_codec": ["truehd", "aac"],
+        "container": ["mkv", "mp4"],
+        "audio_channels": [8, 2],
+    }
+    for facet, values in expected.items():
+        assert summary_module._facet_values(item, facet) == values
+
+
+def test_technical_filter_forces_materialized_summary_count() -> None:
+    section = FakeSection()
+    section.search_results = [_partial(1), _partial(2)]
+    server = FakeServer([section], total_size=99)
+
+    result = _library_summary(
+        _client(server),
+        {
+            "media_type": "movie",
+            "video_codecs": ["hevc"],
+            "watched_state": "any",
+            "hdr": "any",
+        },
+    )
+
+    assert result["count"] == 2
+    assert server.query_calls == []
+    assert section.search_calls[0]["media__videoCodec__in"] == ["hevc"]
