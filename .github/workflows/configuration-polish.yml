@@ -1,0 +1,150 @@
+name: Apply configuration polish
+
+on:
+  push:
+    branches:
+      - feat/configuration-polish
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/configuration-polish
+      - name: Apply native Assist exposure option
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"expected text not found in {path}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Constants
+          replace(
+              "custom_components/plex_extended/const.py",
+              'CONF_ALLOW_LLM_MUTATIONS: Final = "allow_llm_mutations"\n',
+              'CONF_ALLOW_LLM_MUTATIONS: Final = "allow_llm_mutations"\nCONF_ENABLE_LLM_TOOLS: Final = "enable_llm_tools"\n',
+          )
+
+          # Pure policy helper so enable/disable semantics are independently testable.
+          Path("custom_components/plex_extended/llm_policy.py").write_text('''"""Native Assist exposure policy for Plex Extended."""\n\nfrom __future__ import annotations\n\nfrom typing import TypeVar\n\nfrom .const import CONF_ENABLE_LLM_TOOLS\n\n_T = TypeVar("_T")\n\n\ndef native_llm_tools_enabled(client: object) -> bool:\n    """Return whether one Plex Extended client contributes native Assist tools.\n\n    Existing entries predate this option, so absence deliberately means enabled.\n    """\n    entry = getattr(client, "entry", None)\n    options = getattr(entry, "options", None) or {}\n    return bool(options.get(CONF_ENABLE_LLM_TOOLS, True))\n\n\ndef enabled_llm_clients(clients: dict[str, _T]) -> dict[str, _T]:\n    """Filter a display-name client mapping to entries that opted into Assist tools."""\n    return {\n        label: client\n        for label, client in clients.items()\n        if native_llm_tools_enabled(client)\n    }\n''')
+
+          # Options flow.
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '    CONF_DEFAULT_USER_ID,\n',
+              '    CONF_DEFAULT_USER_ID,\n    CONF_ENABLE_LLM_TOOLS,\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '        """Configure default Plex user and optional Assist write access."""\n',
+              '        """Configure Plex user context and native Assist exposure."""\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '            allow_llm_mutations = bool(\n                user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n',
+              '            enable_llm_tools = bool(user_input.get(CONF_ENABLE_LLM_TOOLS, True))\n            allow_llm_mutations = bool(\n                user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '                options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations\n',
+              '                options[CONF_ENABLE_LLM_TOOLS] = enable_llm_tools\n                options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '            allow_llm_mutations = bool(\n                self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n',
+              '            enable_llm_tools = bool(\n                self.config_entry.options.get(CONF_ENABLE_LLM_TOOLS, True)\n            )\n            allow_llm_mutations = bool(\n                self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '                    vol.Required(\n                        CONF_ALLOW_LLM_MUTATIONS,\n                        default=allow_llm_mutations,\n                    ): cv.boolean,\n',
+              '                    vol.Required(\n                        CONF_ENABLE_LLM_TOOLS,\n                        default=enable_llm_tools,\n                    ): cv.boolean,\n                    vol.Required(\n                        CONF_ALLOW_LLM_MUTATIONS,\n                        default=allow_llm_mutations,\n                    ): cv.boolean,\n',
+          )
+
+          # LLM provider: rebuild the base read tools against only enabled entries so
+          # multi-server schemas never expose disabled servers.
+          replace(
+              "custom_components/plex_extended/llm.py",
+              'from .library_summary_llm import LibrarySummaryPlexTool\n',
+              'from .library_summary_llm import LibrarySummaryPlexTool\nfrom .llm_policy import enabled_llm_clients\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '    clients = _loaded_clients(hass)\n    mutation_clients = {\n',
+              '    clients = enabled_llm_clients(_loaded_clients(hass))\n    if not clients:\n        return None\n\n    mutation_clients = {\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '    tools = [tool for tool in result.tools if tool.name not in _MUTATION_TOOL_NAMES]\n',
+              '    tools = [\n        type(tool)(clients)\n        for tool in result.tools\n        if tool.name not in _MUTATION_TOOL_NAMES\n    ]\n',
+          )
+
+          # Strings / translation.
+          for path in (
+              "custom_components/plex_extended/strings.json",
+              "custom_components/plex_extended/translations/en.json",
+          ):
+              replace(
+                  path,
+                  '"description": "Choose the default Plex user for viewing state. You can also optionally allow Assist LLMs to mark items watched or unwatched; this write access is disabled by default.",',
+                  '"description": "Choose the default Plex user and whether this server contributes native Plex Extended tools to Assist. Watch-state writes remain a separate opt-in.",',
+              )
+              replace(
+                  path,
+                  '"default_user_id": "Default Plex user",\n          "allow_llm_mutations": "Allow Assist to change Plex watch state"',
+                  '"default_user_id": "Default Plex user",\n          "enable_llm_tools": "Enable native Assist tools",\n          "allow_llm_mutations": "Allow Assist to change Plex watch state"',
+              )
+              replace(
+                  path,
+                  '"data_description": {\n          "allow_llm_mutations":',
+                  '"data_description": {\n          "enable_llm_tools": "When disabled, this Plex server is omitted from all native Plex Extended Assist tools. Manual Home Assistant actions remain available. Existing installations default to enabled.",\n          "allow_llm_mutations":',
+              )
+
+          # Diagnostics: expose non-sensitive policy state explicitly.
+          replace(
+              "custom_components/plex_extended/diagnostics.py",
+              '    CONF_CLIENT_ID,\n',
+              '    CONF_CLIENT_ID,\n    CONF_ALLOW_LLM_MUTATIONS,\n    CONF_ENABLE_LLM_TOOLS,\n',
+          )
+          replace(
+              "custom_components/plex_extended/diagnostics.py",
+              '        "features": FEATURES,\n',
+              '        "features": FEATURES,\n        "options": {\n            "native_assist_tools_enabled": bool(\n                entry.options.get(CONF_ENABLE_LLM_TOOLS, True)\n            ),\n            "assist_watch_state_mutations_enabled": bool(\n                entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            ),\n        },\n',
+          )
+
+          # README.
+          replace(
+              "README.md",
+              '- Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.\n',
+              '- Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API, with per-server exposure control.\n',
+          )
+          marker = '### Plex Watchlist is different\n'
+          readme = Path("README.md")
+          text = readme.read_text()
+          if marker not in text:
+              raise SystemExit("README insertion marker missing")
+          section = '''### Native Assist tool exposure\n\nOpen **Settings → Devices & services → Plex Extended → Configure** to control whether a server contributes native Plex Extended tools to Home Assistant Assist. **Enable native Assist tools** is on by default for backwards compatibility. Turning it off removes that server from all Plex Extended native LLM tools while leaving every manual Home Assistant action available.\n\nIn a multi-server setup, disabled entries are omitted entirely from the LLM tools' server selector. If every Plex Extended entry disables native Assist tools, Plex Extended contributes no LLM tools. The separate **Allow Assist to change Plex watch state** option still defaults off; it has an effect only while native Assist tools are enabled for that server.\n\n'''
+          readme.write_text(text.replace(marker, section + marker, 1))
+
+          # Focused policy/contract tests.
+          Path("tests/test_llm_exposure_policy.py").write_text('''"""Tests for per-entry native Assist exposure policy."""\n\nfrom __future__ import annotations\n\nimport importlib.util\nfrom pathlib import Path\nimport sys\nfrom types import ModuleType, SimpleNamespace\n\nROOT = Path(__file__).parents[1]\nCOMPONENT = ROOT / "custom_components" / "plex_extended"\n\ncustom_components = ModuleType("custom_components")\ncustom_components.__path__ = [str(ROOT / "custom_components")]\nsys.modules.setdefault("custom_components", custom_components)\npackage = ModuleType("custom_components.plex_extended")\npackage.__path__ = [str(COMPONENT)]\nsys.modules.setdefault("custom_components.plex_extended", package)\n\ndef load(name: str):\n    full = f"custom_components.plex_extended.{name}"\n    spec = importlib.util.spec_from_file_location(full, COMPONENT / f"{name}.py")\n    assert spec and spec.loader\n    module = importlib.util.module_from_spec(spec)\n    sys.modules[full] = module\n    spec.loader.exec_module(module)\n    return module\n\nload("const")\npolicy = load("llm_policy")\n\ndef client(options=None):\n    return SimpleNamespace(entry=SimpleNamespace(options=options or {}))\n\ndef test_existing_entries_default_to_native_tools_enabled() -> None:\n    assert policy.native_llm_tools_enabled(client()) is True\n\ndef test_native_tools_can_be_disabled_per_entry() -> None:\n    assert policy.native_llm_tools_enabled(client({"enable_llm_tools": False})) is False\n\ndef test_enabled_client_filter_preserves_only_opted_in_servers() -> None:\n    clients = {\n        "Living room": client({"enable_llm_tools": True}),\n        "Remote server": client({"enable_llm_tools": False}),\n        "Legacy server": client(),\n    }\n    assert list(policy.enabled_llm_clients(clients)) == ["Living room", "Legacy server"]\n''')
+
+          Path("tests/test_llm_exposure_contract.py").write_text('''"""Static contract checks for native Assist exposure configuration."""\n\nfrom pathlib import Path\n\nROOT = Path(__file__).parents[1]\n\ndef test_options_and_provider_share_native_tool_setting() -> None:\n    const = (ROOT / "custom_components/plex_extended/const.py").read_text()\n    flow = (ROOT / "custom_components/plex_extended/config_flow.py").read_text()\n    provider = (ROOT / "custom_components/plex_extended/llm.py").read_text()\n    assert 'CONF_ENABLE_LLM_TOOLS: Final = "enable_llm_tools"' in const\n    assert "CONF_ENABLE_LLM_TOOLS" in flow\n    assert "enabled_llm_clients(_loaded_clients(hass))" in provider\n    assert "type(tool)(clients)" in provider\n\ndef test_ui_docs_and_diagnostics_expose_policy() -> None:\n    strings = (ROOT / "custom_components/plex_extended/strings.json").read_text()\n    translation = (ROOT / "custom_components/plex_extended/translations/en.json").read_text()\n    diagnostics = (ROOT / "custom_components/plex_extended/diagnostics.py").read_text()\n    readme = (ROOT / "README.md").read_text()\n    for text in (strings, translation):\n        assert '"enable_llm_tools": "Enable native Assist tools"' in text\n    assert '"native_assist_tools_enabled"' in diagnostics\n    assert "### Native Assist tool exposure" in readme\n\ndef test_temporary_workflow_is_removed() -> None:\n    assert not (ROOT / ".github/workflows/configuration-polish.yml").exists()\n''')
+
+          Path(".github/workflows/configuration-polish.yml").unlink()
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add native Assist exposure control"
+          git push origin HEAD:feat/configuration-polish
