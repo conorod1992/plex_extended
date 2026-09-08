@@ -52,11 +52,10 @@ def _load_component_module(name: str, filename: str) -> ModuleType:
 _install_homeassistant_stubs()
 custom_components = sys.modules.setdefault("custom_components", ModuleType("custom_components"))
 custom_components.__path__ = [str(ROOT / "custom_components")]
-sys.modules.setdefault("custom_components", custom_components)
-
-package = ModuleType("custom_components.plex_extended")
+package = sys.modules.setdefault(
+    "custom_components.plex_extended", ModuleType("custom_components.plex_extended")
+)
 package.__path__ = [str(COMPONENT)]
-sys.modules.setdefault("custom_components.plex_extended", package)
 
 const = _load_component_module("const", "const.py")
 client_module = _load_component_module("client", "client.py")
