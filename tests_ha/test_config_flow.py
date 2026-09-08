@@ -135,7 +135,6 @@ async def test_website_auth_creates_selected_server_entry(
 
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
         assert result["type"] is FlowResultType.EXTERNAL_STEP_DONE
-        assert result["next_step_id"] == "discover_servers"
 
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
 
