@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Compile Python
-        run: python -m compileall -q custom_components/plex_extended
+        run: python -m compileall -q custom_components/plex_extended scripts
 
   tests:
     runs-on: ubuntu-latest
