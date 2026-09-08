@@ -11,6 +11,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.llm import LLMContext, ToolInput
 from homeassistant.util.json import JsonObjectType
 
+from .client import PlexExtendedClient
 from .const import DEFAULT_FACET_LIMIT, LIBRARY_SUMMARY_FACETS
 from .library_summary import async_library_summary
 from .llm_tools import QueryLibraryPlexTool
@@ -42,7 +43,7 @@ class LibrarySummaryPlexTool(QueryLibraryPlexTool):
         "the configured default Plex user unless user or user_id explicitly overrides it."
     )
 
-    def __init__(self, clients) -> None:
+    def __init__(self, clients: dict[str, PlexExtendedClient]) -> None:
         super().__init__(clients)
         fields = {
             field: validator
