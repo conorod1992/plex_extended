@@ -20,7 +20,7 @@ def native_llm_tools_enabled(client: object) -> bool:
 
 
 def enabled_llm_clients(clients: dict[str, _T]) -> dict[str, _T]:
-    """Filter a display-name client mapping to entries that opted into Assist tools."""
+    """Return enabled clients while preserving their unambiguous display labels."""
     return {
         label: client
         for label, client in clients.items()
