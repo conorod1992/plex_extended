@@ -7,7 +7,9 @@ from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 
+from plexapi.exceptions import NotFound, Unauthorized
 import pytest
+from requests.exceptions import ConnectionError
 
 ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
@@ -306,3 +308,54 @@ def test_include_summary_is_forwarded_to_source_and_results() -> None:
 
     assert "summary" not in result["source"]
     assert "summary" not in result["hubs"][0]["results"][0]
+
+
+def test_source_fetch_unauthorized_is_not_hidden() -> None:
+    source = _source([])
+    server = FakeServer(source)
+
+    def denied_fetch(rating_key):
+        raise Unauthorized("expired token")
+
+    server.fetchItem = denied_fetch
+
+    with pytest.raises(Unauthorized, match="expired token"):
+        _related_media(_client(server), {"rating_key": "10"})
+
+
+def test_source_fetch_connection_error_is_not_hidden() -> None:
+    source = _source([])
+    server = FakeServer(source)
+
+    def failed_fetch(rating_key):
+        raise ConnectionError("offline")
+
+    server.fetchItem = failed_fetch
+
+    with pytest.raises(ConnectionError, match="offline"):
+        _related_media(_client(server), {"rating_key": "10"})
+
+
+def test_related_hub_unauthorized_is_not_hidden() -> None:
+    source = _source([])
+
+    def denied_hubs():
+        raise Unauthorized("expired token")
+
+    source.hubs = denied_hubs
+
+    with pytest.raises(Unauthorized, match="expired token"):
+        _related_media(_client(FakeServer(source)), {"rating_key": "10"})
+
+
+def test_missing_source_stays_a_feature_error() -> None:
+    source = _source([])
+    server = FakeServer(source)
+
+    def missing_fetch(rating_key):
+        raise NotFound("missing")
+
+    server.fetchItem = missing_fetch
+
+    with pytest.raises(PlexExtendedError, match="Plex media not found for rating key 10"):
+        _related_media(_client(server), {"rating_key": "10"})

@@ -7,6 +7,10 @@ from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 
+from plexapi.exceptions import Unauthorized
+import pytest
+from requests.exceptions import ConnectionError
+
 
 ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
@@ -58,6 +62,7 @@ client_module = _load_component_module("client", "client.py")
 context_module = _load_component_module("user_context", "user_context.py")
 
 PlexExtendedClient = client_module.PlexExtendedClient
+PlexExtendedError = client_module.PlexExtendedError
 resolve_user_context = context_module.resolve_user_context
 _browse_for_context = context_module._browse_for_context
 _media_details_for_context = context_module._media_details_for_context
@@ -330,3 +335,56 @@ def test_media_details_progress_comes_from_default_user_context() -> None:
 
     assert result["result"]["watched"] is True
     assert result["user_id"] == 7
+
+
+def test_valid_non_owner_switch_denial_stays_permission_error() -> None:
+    """A valid token without impersonation rights should keep the useful owner error."""
+    owner, _, _ = _household_servers()
+
+    def denied_switch(name):
+        raise Unauthorized("not permitted")
+
+    owner.switchUser = denied_switch
+    client = _client(owner, "7")
+
+    with pytest.raises(PlexExtendedError, match="must be the server owner"):
+        resolve_user_context(client)
+
+
+def test_expired_auth_during_switch_is_not_mislabeled_as_permission_error() -> None:
+    """If the base account also fails auth, raw Unauthorized must reach _async_run."""
+    owner, _, _ = _household_servers()
+    account_calls = 0
+
+    def accounts_then_expired():
+        nonlocal account_calls
+        account_calls += 1
+        if account_calls == 1:
+            return list(owner.accounts)
+        raise Unauthorized("expired token")
+
+    def denied_switch(name):
+        raise Unauthorized("switch rejected")
+
+    owner.systemAccounts = accounts_then_expired
+    owner.switchUser = denied_switch
+    client = _client(owner, "7")
+
+    with pytest.raises(Unauthorized, match="expired token"):
+        resolve_user_context(client)
+
+    assert account_calls == 2
+
+
+def test_switch_user_connection_failure_is_not_mislabeled() -> None:
+    """Transport failure from switchUser must reach the central client wrapper."""
+    owner, _, _ = _household_servers()
+
+    def offline_switch(name):
+        raise ConnectionError("offline")
+
+    owner.switchUser = offline_switch
+    client = _client(owner, "7")
+
+    with pytest.raises(ConnectionError, match="offline"):
+        resolve_user_context(client)
