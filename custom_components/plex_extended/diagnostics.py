@@ -15,6 +15,7 @@ from .const import (
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_ALLOW_LLM_MUTATIONS,
+    CONF_ALLOW_LLM_PLAYLIST_MUTATIONS,
     CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
     CONF_ENABLE_LLM_TOOLS,
     CONF_MACHINE_IDENTIFIER,
@@ -47,6 +48,9 @@ FEATURES = [
     "collection_items",
     "list_playlists",
     "playlist_items",
+    "create_playlist",
+    "add_to_playlist",
+    "remove_from_playlist",
     "watchlist",
     "add_to_watchlist",
     "remove_from_watchlist",
@@ -75,6 +79,9 @@ async def async_get_config_entry_diagnostics(
             ),
             "assist_watchlist_mutations_enabled": bool(
                 entry.options.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)
+            ),
+            "assist_playlist_mutations_enabled": bool(
+                entry.options.get(CONF_ALLOW_LLM_PLAYLIST_MUTATIONS, False)
             ),
         },
     }

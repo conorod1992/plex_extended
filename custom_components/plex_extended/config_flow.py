@@ -31,6 +31,7 @@ from .const import (
     AUTH_CALLBACK_PATH,
     CONF_ALLOW_LLM_MUTATIONS,
     CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
+    CONF_ALLOW_LLM_PLAYLIST_MUTATIONS,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_DEFAULT_USER_ID,
@@ -346,6 +347,9 @@ class PlexExtendedOptionsFlow(OptionsFlow):
             allow_llm_watchlist_mutations = bool(
                 user_input.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)
             )
+            allow_llm_playlist_mutations = bool(
+                user_input.get(CONF_ALLOW_LLM_PLAYLIST_MUTATIONS, False)
+            )
             if selected:
                 try:
                     await async_validate_user_context(client, selected)
@@ -363,6 +367,9 @@ class PlexExtendedOptionsFlow(OptionsFlow):
                 options[CONF_ALLOW_LLM_WATCHLIST_MUTATIONS] = (
                     allow_llm_watchlist_mutations
                 )
+                options[CONF_ALLOW_LLM_PLAYLIST_MUTATIONS] = (
+                    allow_llm_playlist_mutations
+                )
                 return self.async_create_entry(title="", data=options)
         else:
             selected = str(self.config_entry.options.get(CONF_DEFAULT_USER_ID, ""))
@@ -375,6 +382,11 @@ class PlexExtendedOptionsFlow(OptionsFlow):
             allow_llm_watchlist_mutations = bool(
                 self.config_entry.options.get(
                     CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False
+                )
+            )
+            allow_llm_playlist_mutations = bool(
+                self.config_entry.options.get(
+                    CONF_ALLOW_LLM_PLAYLIST_MUTATIONS, False
                 )
             )
 
@@ -396,6 +408,10 @@ class PlexExtendedOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
                         default=allow_llm_watchlist_mutations,
+                    ): cv.boolean,
+                    vol.Required(
+                        CONF_ALLOW_LLM_PLAYLIST_MUTATIONS,
+                        default=allow_llm_playlist_mutations,
                     ): cv.boolean,
                 }
             ),

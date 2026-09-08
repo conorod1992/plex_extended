@@ -52,17 +52,19 @@
     "step": {
       "init": {
         "title": "Plex Extended options",
-        "description": "Choose the default Plex user and whether this server contributes native Plex Extended tools to Assist. Watch-state and account Watchlist writes are separate opt-ins.",
+        "description": "Choose the default Plex user and whether this server contributes native Plex Extended tools to Assist. Watch-state, playlist, and account Watchlist writes are separate opt-ins.",
         "data": {
           "default_user_id": "Default Plex user",
           "enable_llm_tools": "Enable native Assist tools",
           "allow_llm_mutations": "Allow Assist to change Plex watch state",
-          "allow_llm_watchlist_mutations": "Allow Assist to change Plex Watchlist"
+          "allow_llm_watchlist_mutations": "Allow Assist to change Plex Watchlist",
+          "allow_llm_playlist_mutations": "Allow Assist to change Plex playlists"
         },
         "data_description": {
           "enable_llm_tools": "When disabled, this Plex server is omitted from all native Plex Extended Assist tools. Manual Home Assistant actions remain available. Existing installations default to enabled.",
           "allow_llm_mutations": "When native Assist tools are enabled, this additionally exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of either setting.",
-          "allow_llm_watchlist_mutations": "When native Assist tools are enabled, this exposes add/remove Plex Watchlist tools for the configured plex.tv account. It is disabled by default and is separate from household-user watch-state writes."
+          "allow_llm_watchlist_mutations": "When native Assist tools are enabled, this exposes add/remove Plex Watchlist tools for the configured plex.tv account. It is disabled by default and is separate from household-user watch-state writes.",
+          "allow_llm_playlist_mutations": "When native Assist tools are enabled, this exposes create/add/remove regular playlist tools for the selected/default Plex user. It is disabled by default, uses exact Plex rating keys, and does not permit smart or radio playlist edits."
         }
       }
     },

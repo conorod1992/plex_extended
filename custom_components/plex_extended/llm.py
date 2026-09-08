@@ -14,6 +14,7 @@ from .active_streams_llm import ActiveStreamsPlexTool
 from .client import PlexExtendedClient
 from .const import (
     CONF_ALLOW_LLM_MUTATIONS,
+    CONF_ALLOW_LLM_PLAYLIST_MUTATIONS,
     CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
 )
 from .discover_watchlist_llm import (
@@ -23,6 +24,11 @@ from .discover_watchlist_llm import (
 )
 from .library_summary_llm import LibrarySummaryPlexTool
 from .llm_policy import enabled_llm_clients
+from .playlist_mutations_llm import (
+    AddToPlaylistPlexTool,
+    CreatePlaylistPlexTool,
+    RemoveFromPlaylistPlexTool,
+)
 from .llm_tools import (
     MarkUnwatchedPlexTool,
     MarkWatchedPlexTool,
@@ -55,6 +61,13 @@ _WATCHLIST_MUTATION_PROMPT = (
     "use them only for an explicit user request and only with the exact guid and title "
     "returned by discover_search or other Plex Extended Watchlist data. Never invent or "
     "modify a Discover guid."
+)
+_PLAYLIST_MUTATION_PROMPT = (
+    " create_playlist, add_to_playlist, and remove_from_playlist change regular Plex "
+    "playlists for the selected/default Plex user. Use them only for an explicit user "
+    "request. Resolve exact local media rating_key values with read tools, and resolve "
+    "an existing playlist_rating_key with list_playlists before add/remove. Never invent "
+    "identifiers. Smart and radio playlists are read-only for these tools."
 )
 _LIBRARY_SUMMARY_PROMPT = (
     " Use library_summary instead of query_library when the user wants an exact count, "
@@ -126,6 +139,13 @@ def async_get_tools(
             client.entry.options.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)
         )
     }
+    playlist_mutation_clients = {
+        label: client
+        for label, client in clients.items()
+        if bool(
+            client.entry.options.get(CONF_ALLOW_LLM_PLAYLIST_MUTATIONS, False)
+        )
+    }
 
     tools = [
         type(tool)(clients)
@@ -169,6 +189,25 @@ def async_get_tools(
             ]
         )
 
+    if playlist_mutation_clients:
+        force_server_selector = len(clients) > 1
+        tools.extend(
+            [
+                CreatePlaylistPlexTool(
+                    playlist_mutation_clients,
+                    force_server_selector=force_server_selector,
+                ),
+                AddToPlaylistPlexTool(
+                    playlist_mutation_clients,
+                    force_server_selector=force_server_selector,
+                ),
+                RemoveFromPlaylistPlexTool(
+                    playlist_mutation_clients,
+                    force_server_selector=force_server_selector,
+                ),
+            ]
+        )
+
     prompt = result.prompt
     if not mutation_clients and prompt:
         prompt = prompt.replace(_MUTATION_PROMPT, "")
@@ -176,6 +215,7 @@ def async_get_tools(
         f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}{_LIBRARY_SUMMARY_PROMPT}"
         f"{_DISCOVER_PROMPT}"
         f"{_WATCHLIST_MUTATION_PROMPT if watchlist_mutation_clients else ''}"
+        f"{_PLAYLIST_MUTATION_PROMPT if playlist_mutation_clients else ''}"
     )
 
     return LLMTools(tools=tools, prompt=prompt)
