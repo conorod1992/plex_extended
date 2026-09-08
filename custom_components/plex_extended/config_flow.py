@@ -33,6 +33,7 @@ from .const import (
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_DEFAULT_USER_ID,
+    CONF_ENABLE_LLM_TOOLS,
     CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_NAME,
     CONF_SERVER_TOKEN,
@@ -314,7 +315,7 @@ class PlexExtendedOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Configure default Plex user and optional Assist write access."""
+        """Configure Plex user context and native Assist exposure."""
         client = self.config_entry.runtime_data
         if not isinstance(client, PlexExtendedClient):
             return self.async_abort(reason="not_loaded")
@@ -337,6 +338,7 @@ class PlexExtendedOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             selected = str(user_input.get(CONF_DEFAULT_USER_ID, ""))
+            enable_llm_tools = bool(user_input.get(CONF_ENABLE_LLM_TOOLS, True))
             allow_llm_mutations = bool(
                 user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)
             )
@@ -352,10 +354,14 @@ class PlexExtendedOptionsFlow(OptionsFlow):
                     options[CONF_DEFAULT_USER_ID] = selected
                 else:
                     options.pop(CONF_DEFAULT_USER_ID, None)
+                options[CONF_ENABLE_LLM_TOOLS] = enable_llm_tools
                 options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations
                 return self.async_create_entry(title="", data=options)
         else:
             selected = str(self.config_entry.options.get(CONF_DEFAULT_USER_ID, ""))
+            enable_llm_tools = bool(
+                self.config_entry.options.get(CONF_ENABLE_LLM_TOOLS, True)
+            )
             allow_llm_mutations = bool(
                 self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)
             )
@@ -367,6 +373,10 @@ class PlexExtendedOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_DEFAULT_USER_ID, default=selected): vol.In(choices),
+                    vol.Required(
+                        CONF_ENABLE_LLM_TOOLS,
+                        default=enable_llm_tools,
+                    ): cv.boolean,
                     vol.Required(
                         CONF_ALLOW_LLM_MUTATIONS,
                         default=allow_llm_mutations,

@@ -14,6 +14,8 @@ from .const import (
     CONF_ACCOUNT_TOKEN,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
+    CONF_ALLOW_LLM_MUTATIONS,
+    CONF_ENABLE_LLM_TOOLS,
     CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_NAME,
     CONF_SERVER_TOKEN,
@@ -60,6 +62,14 @@ async def async_get_config_entry_diagnostics(
     result: dict[str, Any] = {
         "entry_data": async_redact_data(dict(entry.data), TO_REDACT),
         "features": FEATURES,
+        "options": {
+            "native_assist_tools_enabled": bool(
+                entry.options.get(CONF_ENABLE_LLM_TOOLS, True)
+            ),
+            "assist_watch_state_mutations_enabled": bool(
+                entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)
+            ),
+        },
     }
 
     base_url = entry.data.get(CONF_BASE_URL)
