@@ -1,0 +1,149 @@
+from pathlib import Path
+
+services_path = Path("custom_components/plex_extended/services.yaml")
+services = services_path.read_text()
+marker = "\nrecently_added:\n"
+assert services.count(marker) == 1
+block = r'''
+
+tv_catch_up:
+  name: TV catch-up
+  description: Return unwatched and optionally in-progress TV episodes for the selected/default Plex user, grouped by show and ordered by newest addition.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    library:
+      name: TV library
+      description: Optional exact TV library name.
+      selector:
+        text:
+    library_id:
+      name: TV library ID
+      description: Optional stable TV library section ID returned by List libraries.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for watch state.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
+    since:
+      name: Since
+      description: Inclusive added-time start. Use an ISO date or datetime; date-only and timezone-less values use Home Assistant's timezone.
+      selector:
+        text:
+    before:
+      name: Before
+      description: Exclusive added-time end. Use an ISO date or datetime; date-only and timezone-less values use Home Assistant's timezone.
+      selector:
+        text:
+    within_days:
+      name: Within days
+      description: Restrict to episodes added during the trailing number of days. Cannot be combined with Since or Before.
+      selector:
+        number:
+          min: 1
+          max: 3650
+          mode: box
+    include_specials:
+      name: Include specials
+      description: Include season 0/special episodes in the catch-up results.
+      default: false
+      selector:
+        boolean:
+    include_in_progress:
+      name: Include in-progress episodes
+      description: Include partially watched episodes as remaining catch-up items in addition to never-started episodes.
+      default: true
+      selector:
+        boolean:
+    limit:
+      name: Show limit
+      description: Maximum number of show groups returned. Overall matched counts are reported separately.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    episode_limit:
+      name: Episode detail limit per show
+      description: Maximum number of episode objects returned inside each show group. Group counts still include all matching scanned episodes.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_summary:
+      name: Include summaries
+      description: Include episode summaries in returned episode detail.
+      default: true
+      selector:
+        boolean:
+'''
+services_path.write_text(services.replace(marker, block + marker))
+
+readme_path = Path("README.md")
+readme = readme_path.read_text()
+action_marker = "\n### `plex_extended.recently_added`\n"
+assert readme.count(action_marker) == 1
+action_block = r'''
+
+### `plex_extended.tv_catch_up`
+
+Returns TV episodes the selected/default Plex user still has to watch, grouped by show. It is intended for cross-show questions such as “what new episodes do I have to catch up on?”; use `watch_status` instead for detailed progress in one specific show.
+
+```yaml
+action: plex_extended.tv_catch_up
+data:
+  within_days: 14
+  include_specials: false
+  include_in_progress: true
+  limit: 10
+  episode_limit: 5
+response_variable: plex_catch_up
+```
+
+The optional `since`, `before`, and `within_days` fields use the same added-time semantics as `recently_added`: `since` is inclusive, `before` is exclusive, and date-only/timezone-less values use Home Assistant's configured timezone. With no time window the action returns a bounded newest-first catch-up queue rather than imposing an arbitrary hidden date cutoff.
+
+Plex Extended asks PMS for unwatched candidates and, when enabled, in-progress candidates separately, then deduplicates and re-checks viewing state client-side. Season 0/specials are excluded by default. Results distinguish never-started from partially watched episodes, group them by stable show identity, return episodes in canonical season/episode order, and report independent show/episode-detail truncation. Candidate scans are capped at 1,000 episodes per Plex state query per TV library; `candidate_scan_truncated` is explicit if that safety bound is reached.
+'''
+readme = readme.replace(action_marker, action_block + action_marker)
+
+tool_marker = "- `plex_extended__watch_status`\n"
+assert readme.count(tool_marker) == 1
+readme = readme.replace(tool_marker, tool_marker + "- `plex_extended__tv_catch_up`\n")
+
+example_marker = '- "Where am I up to in Resident Alien?"\n'
+assert readme.count(example_marker) == 1
+readme = readme.replace(
+    example_marker,
+    example_marker + '- "What new TV episodes do I have to catch up on?"\n',
+)
+
+old_guidance = (
+    "The LLM guidance distinguishes local fuzzy search, Plex Discover search, "
+    "structured item queries, aggregate library summaries, TV progress, "
+    "recent-media windows, collections/playlists, and account-level Watchlist."
+)
+new_guidance = (
+    "The LLM guidance distinguishes local fuzzy search, Plex Discover search, "
+    "structured item queries, aggregate library summaries, single-show TV progress, "
+    "cross-show TV catch-up, recent-media windows, collections/playlists, and "
+    "account-level Watchlist."
+)
+assert old_guidance in readme
+readme_path.write_text(readme.replace(old_guidance, new_guidance))
+
+Path(".github/scripts/tv_catch_up_docs.py").unlink()
+Path(".github/workflows/tv-catch-up-docs.yml").unlink()
