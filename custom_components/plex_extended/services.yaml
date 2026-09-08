@@ -858,6 +858,68 @@ tv_catch_up:
       selector:
         boolean:
 
+
+related_media:
+  name: Related media
+  description: Return Plex-native related/recommendation hubs for one exact local movie or TV show, preserving Plex's own hub categories and ordering.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    rating_key:
+      name: Rating key
+      description: Exact positive numeric local Plex rating key for a movie or TV show, returned by Search or Query library.
+      required: true
+      selector:
+        text:
+    library:
+      name: Library
+      description: Optional exact library name used to assert that the seed item belongs to the expected library.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable library section ID used to assert the seed item's library.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for viewing-state metadata in local results.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
+    hub_limit:
+      name: Hub limit
+      description: Maximum number of Plex related hubs to return after hubs without local media are removed.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+    item_limit:
+      name: Items per hub
+      description: Maximum number of already-loaded local Plex media items returned from each hub. Plex Extended does not automatically expand a hub that reports more items.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 20
+          mode: box
+    include_summary:
+      name: Include summaries
+      description: Include summaries for the seed and returned local media items.
+      default: true
+      selector:
+        boolean:
+
 recently_added:
   name: Recently added
   description: Return recently added Plex media with optional time windows and TV episode grouping.
