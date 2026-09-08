@@ -134,7 +134,9 @@ data:
 response_variable: plex_results
 ```
 
-Supported typed criteria include partial title; genre; actor/director/collection/studio/content rating; exact year/range/decade; watched/unwatched/in-progress; resolution/HDR; critic/audience/user rating ranges; runtime; added/last-viewed dates; and sorting.
+Supported typed criteria include partial title; genre; actor/director/collection/studio/content rating; audio/subtitle language; labels and country; duplicate/matched state; exact year/range/decade; watched/unwatched/in-progress; resolution/HDR; video/audio codec, container and audio-channel count; critic/audience/user rating ranges; runtime; added/last-viewed dates; and sorting.
+
+Audio/subtitle language, label, country, duplicate and unmatched criteria use Plex's native server filters. Codec/container/channel criteria use PlexAPI's documented XML post-filtering after the server-native candidate set, so very broad technical queries can require Plex to return more metadata than a purely server-native query.
 
 `media_type` can be `movie`, `show`, `season`, `episode`, `artist`, `album`, or `track`. If no library is supplied, Plex Extended automatically selects one only when exactly one compatible library exists. The action deliberately exposes a curated typed interface rather than arbitrary Plex filter dictionaries.
 
@@ -158,7 +160,7 @@ data:
 response_variable: plex_summary
 ```
 
-Supported facets are `genre`, `year`, `decade`, `resolution`, `watched_state`, `content_rating`, `studio`, and `collection`. Facets are ordered by descending count and carry `total_values` plus `truncated`, so a limited “top values” response cannot be mistaken for the complete distribution. Multi-valued facets such as genre, collection, and resolution count one item once in each distinct value it belongs to, so those facet counts can legitimately sum above the overall media count.
+Supported facets are `genre`, `year`, `decade`, `resolution`, `watched_state`, `content_rating`, `studio`, `collection`, `label`, `country`, `audio_language`, `subtitle_language`, `video_codec`, `audio_codec`, `container`, and `audio_channels`. Facets are ordered by descending count and carry `total_values` plus `truncated`, so a limited “top values” response cannot be mistaken for the complete distribution. Multi-valued facets such as genre, collection, and resolution count one item once in each distinct value it belongs to, so those facet counts can legitimately sum above the overall media count.
 
 Count-only requests that use Plex-native filters read Plex's filtered `totalSize` directly instead of downloading all matching media. Requests for facets, total duration, or criteria that require PlexAPI-side post-filtering materialize the exact matching set. Tag/technical facets hydrate metadata in bounded rating-key batches rather than triggering one reload per item.
 

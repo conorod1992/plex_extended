@@ -56,6 +56,10 @@ LLM_TEXT_LIST = vol.All(
     cv.ensure_list,
     [vol.All(cv.string, vol.Length(min=1))],
 )
+LLM_CHANNEL_LIST = vol.All(
+    cv.ensure_list,
+    [vol.All(vol.Coerce(int), vol.Range(min=1, max=32))],
+)
 LLM_YEAR = vol.All(vol.Coerce(int), vol.Range(min=0, max=9999))
 LLM_RATING = vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
 LLM_DURATION = vol.All(vol.Coerce(float), vol.Range(min=0))
@@ -172,7 +176,8 @@ class QueryLibraryPlexTool(PlexTool):
     name = "plex_extended__query_library"
     description = (
         "Find Plex media by structured criteria rather than title similarity. Use this "
-        "for genre, people, year, collections, watched state, runtime, resolution/HDR, "
+        "for genre, people, year, collections, language/labels/country, duplicate or "
+        "match state, watched state, runtime, resolution/HDR, codec/container/channels, "
         "ratings, dates, or sorting. Viewing-state filters use the configured default "
         "Plex user unless user or user_id explicitly overrides it."
     )
@@ -193,6 +198,16 @@ class QueryLibraryPlexTool(PlexTool):
                 vol.Optional("collections"): LLM_TEXT_LIST,
                 vol.Optional("content_ratings"): LLM_TEXT_LIST,
                 vol.Optional("studios"): LLM_TEXT_LIST,
+                vol.Optional("audio_languages"): LLM_TEXT_LIST,
+                vol.Optional("subtitle_languages"): LLM_TEXT_LIST,
+                vol.Optional("labels"): LLM_TEXT_LIST,
+                vol.Optional("countries"): LLM_TEXT_LIST,
+                vol.Optional("duplicates"): cv.boolean,
+                vol.Optional("unmatched"): cv.boolean,
+                vol.Optional("video_codecs"): LLM_TEXT_LIST,
+                vol.Optional("audio_codecs"): LLM_TEXT_LIST,
+                vol.Optional("containers"): LLM_TEXT_LIST,
+                vol.Optional("audio_channels"): LLM_CHANNEL_LIST,
                 vol.Optional("year"): LLM_YEAR,
                 vol.Optional("year_min"): LLM_YEAR,
                 vol.Optional("year_max"): LLM_YEAR,

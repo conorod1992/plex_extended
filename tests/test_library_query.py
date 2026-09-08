@@ -191,6 +191,39 @@ def test_build_filters_maps_typed_criteria() -> None:
     assert post_filters["duration__lte"] == 7_200_000
 
 
+def test_richer_library_filters_split_native_and_technical_criteria() -> None:
+    filters, post_filters = _build_filters(
+        {
+            "audio_languages": ["eng", "jpn"],
+            "subtitle_languages": ["eng"],
+            "labels": ["Keep"],
+            "countries": ["Ireland"],
+            "duplicates": True,
+            "unmatched": False,
+            "video_codecs": ["HEVC", "h264"],
+            "audio_codecs": ["TRUEHD"],
+            "containers": ["MKV"],
+            "audio_channels": [6, 8],
+        }
+    )
+
+    assert filters["audioLanguage"] == ["eng", "jpn"]
+    assert filters["subtitleLanguage"] == ["eng"]
+    assert filters["label"] == ["Keep"]
+    assert filters["country"] == ["Ireland"]
+    assert filters["duplicate"] is True
+    assert filters["unmatched!"] is True
+    assert post_filters["media__videoCodec__in"] == ["hevc", "h264"]
+    assert post_filters["media__audioCodec__in"] == ["truehd"]
+    assert post_filters["media__container__in"] == ["mkv"]
+    assert post_filters["media__audioChannels__in"] == [6, 8]
+
+
+def test_false_duplicate_filter_uses_plex_boolean_false_operator() -> None:
+    filters, _ = _build_filters({"duplicates": False})
+    assert filters == {"duplicate!": True}
+
+
 def test_watched_and_sdr_filters_use_plex_false_operators() -> None:
     filters, _ = _build_filters({"watched_state": "watched", "hdr": "sdr"})
     assert filters["unwatched!"] is True

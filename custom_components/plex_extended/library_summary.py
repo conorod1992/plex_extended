@@ -12,7 +12,20 @@ from .library_query import _build_filters, _resolve_query_section
 from .user_context import PlexUserContext, resolve_user_context
 
 _DETAIL_BATCH_SIZE = 100
-_HYDRATED_FACETS = {"genre", "resolution", "collection", "watched_state"}
+_HYDRATED_FACETS = {
+    "genre",
+    "resolution",
+    "collection",
+    "watched_state",
+    "label",
+    "country",
+    "audio_language",
+    "subtitle_language",
+    "video_codec",
+    "audio_codec",
+    "container",
+    "audio_channels",
+}
 
 
 def _criterion_values(value: Any) -> list[str]:
@@ -139,14 +152,33 @@ def _tag_values(item: Any, attribute: str) -> list[str]:
     return result
 
 
-def _resolution_values(item: Any) -> list[str]:
-    """Return unique media resolutions for an item."""
+def _media_attribute_values(item: Any, attribute: str) -> list[Any]:
+    """Return values for one attribute across every media version."""
+    values: list[Any] = []
+    for media in getattr(item, "media", None) or []:
+        value = getattr(media, attribute, None)
+        if value is not None and value != "":
+            values.append(value)
+    return values
+
+
+def _stream_language_values(item: Any, stream_type: int) -> list[str]:
+    """Return language codes/names from audio or subtitle streams."""
     values: list[str] = []
     for media in getattr(item, "media", None) or []:
-        resolution = getattr(media, "videoResolution", None)
-        if resolution:
-            values.append(str(resolution))
+        for part in getattr(media, "parts", None) or []:
+            for stream in getattr(part, "streams", None) or []:
+                if getattr(stream, "streamType", None) != stream_type:
+                    continue
+                value = getattr(stream, "languageCode", None) or getattr(stream, "language", None)
+                if value:
+                    values.append(str(value))
     return values
+
+
+def _resolution_values(item: Any) -> list[str]:
+    """Return unique media resolutions for an item."""
+    return [str(value) for value in _media_attribute_values(item, "videoResolution")]
 
 
 def _watched_state(item: Any) -> str | None:
@@ -195,6 +227,22 @@ def _facet_values(item: Any, facet: str) -> list[Any]:
     if facet == "watched_state":
         value = _watched_state(item)
         return [value] if value is not None else []
+    if facet == "label":
+        return _tag_values(item, "labels")
+    if facet == "country":
+        return _tag_values(item, "countries")
+    if facet == "audio_language":
+        return _stream_language_values(item, 2)
+    if facet == "subtitle_language":
+        return _stream_language_values(item, 3)
+    if facet == "video_codec":
+        return [str(value) for value in _media_attribute_values(item, "videoCodec")]
+    if facet == "audio_codec":
+        return [str(value) for value in _media_attribute_values(item, "audioCodec")]
+    if facet == "container":
+        return [str(value) for value in _media_attribute_values(item, "container")]
+    if facet == "audio_channels":
+        return _media_attribute_values(item, "audioChannels")
 
     data = object.__getattribute__(item, "__dict__")
     if facet == "year":

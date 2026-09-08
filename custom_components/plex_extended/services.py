@@ -73,6 +73,10 @@ TEXT_LIST_SCHEMA = vol.All(
     cv.ensure_list,
     [vol.All(cv.string, vol.Length(min=1))],
 )
+CHANNEL_LIST_SCHEMA = vol.All(
+    cv.ensure_list,
+    [vol.All(vol.Coerce(int), vol.Range(min=1, max=32))],
+)
 YEAR_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=0, max=9999))
 RATING_SCHEMA = vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
 DURATION_SCHEMA = vol.All(vol.Coerce(float), vol.Range(min=0))
@@ -122,6 +126,16 @@ QUERY_LIBRARY_SCHEMA = vol.Schema(
         vol.Optional("collections"): TEXT_LIST_SCHEMA,
         vol.Optional("content_ratings"): TEXT_LIST_SCHEMA,
         vol.Optional("studios"): TEXT_LIST_SCHEMA,
+        vol.Optional("audio_languages"): TEXT_LIST_SCHEMA,
+        vol.Optional("subtitle_languages"): TEXT_LIST_SCHEMA,
+        vol.Optional("labels"): TEXT_LIST_SCHEMA,
+        vol.Optional("countries"): TEXT_LIST_SCHEMA,
+        vol.Optional("duplicates"): cv.boolean,
+        vol.Optional("unmatched"): cv.boolean,
+        vol.Optional("video_codecs"): TEXT_LIST_SCHEMA,
+        vol.Optional("audio_codecs"): TEXT_LIST_SCHEMA,
+        vol.Optional("containers"): TEXT_LIST_SCHEMA,
+        vol.Optional("audio_channels"): CHANNEL_LIST_SCHEMA,
         vol.Optional("year"): YEAR_SCHEMA,
         vol.Optional("year_min"): YEAR_SCHEMA,
         vol.Optional("year_max"): YEAR_SCHEMA,

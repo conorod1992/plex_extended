@@ -126,6 +126,10 @@ def _build_filters(criteria: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         ("collections", "collection"),
         ("content_ratings", "contentRating"),
         ("studios", "studio"),
+        ("audio_languages", "audioLanguage"),
+        ("subtitle_languages", "subtitleLanguage"),
+        ("labels", "label"),
+        ("countries", "country"),
         ("resolutions", "resolution"),
     ):
         values = _values(criteria.get(input_key))
@@ -165,6 +169,14 @@ def _build_filters(criteria: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
     elif hdr_state != "any":
         raise PlexExtendedError(f"Unsupported HDR state: {hdr_state}")
 
+    for input_key, plex_key in (("duplicates", "duplicate"), ("unmatched", "unmatched")):
+        if input_key not in criteria:
+            continue
+        if bool(criteria[input_key]):
+            filters[plex_key] = True
+        else:
+            filters[f"{plex_key}!"] = True
+
     for input_key, plex_key in (
         ("added_after", "addedAt>>"),
         ("added_before", "addedAt<<"),
@@ -195,6 +207,21 @@ def _build_filters(criteria: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         post_filters["duration__gte"] = int(float(duration_min) * 60_000)
     if duration_max is not None:
         post_filters["duration__lte"] = int(float(duration_max) * 60_000)
+
+    for input_key, plex_attribute in (
+        ("video_codecs", "videoCodec"),
+        ("audio_codecs", "audioCodec"),
+        ("containers", "container"),
+    ):
+        values = [value.casefold() for value in _values(criteria.get(input_key))]
+        if values:
+            post_filters[f"media__{plex_attribute}__in"] = values
+
+    channels = criteria.get("audio_channels")
+    if channels is not None:
+        channel_values = [int(value) for value in _values(channels)]
+        if channel_values:
+            post_filters["media__audioChannels__in"] = channel_values
 
     return filters, post_filters
 
