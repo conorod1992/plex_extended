@@ -1,0 +1,321 @@
+name: Apply PR13 Discover and Watchlist surfaces
+
+on:
+  push:
+    branches:
+      - feat/pr13-discover-watchlist-mutations
+    paths:
+      - .github/workflows/pr13-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/pr13-discover-watchlist-mutations
+      - name: Wire options, LLM provider, metadata and docs
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected text not found in {path}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Keep Discover search cheap by default for Assist too.
+          replace(
+              "custom_components/plex_extended/discover_watchlist_llm.py",
+              'vol.Optional("match_local", default=True): cv.boolean,',
+              'vol.Optional("match_local", default=False): cv.boolean,',
+          )
+
+          # Options flow: independent account-Watchlist write opt-in.
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '    CONF_ALLOW_LLM_MUTATIONS,\n',
+              '    CONF_ALLOW_LLM_MUTATIONS,\n    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '            allow_llm_mutations = bool(\n                user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n',
+              '            allow_llm_mutations = bool(\n                user_input.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n            allow_llm_watchlist_mutations = bool(\n                user_input.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)\n            )\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '                options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations\n',
+              '                options[CONF_ALLOW_LLM_MUTATIONS] = allow_llm_mutations\n                options[CONF_ALLOW_LLM_WATCHLIST_MUTATIONS] = (\n                    allow_llm_watchlist_mutations\n                )\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '            allow_llm_mutations = bool(\n                self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n',
+              '            allow_llm_mutations = bool(\n                self.config_entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            )\n            allow_llm_watchlist_mutations = bool(\n                self.config_entry.options.get(\n                    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False\n                )\n            )\n',
+          )
+          replace(
+              "custom_components/plex_extended/config_flow.py",
+              '                    vol.Required(\n                        CONF_ALLOW_LLM_MUTATIONS,\n                        default=allow_llm_mutations,\n                    ): cv.boolean,\n',
+              '                    vol.Required(\n                        CONF_ALLOW_LLM_MUTATIONS,\n                        default=allow_llm_mutations,\n                    ): cv.boolean,\n                    vol.Required(\n                        CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,\n                        default=allow_llm_watchlist_mutations,\n                    ): cv.boolean,\n',
+          )
+
+          # Native Assist provider.
+          replace(
+              "custom_components/plex_extended/llm.py",
+              'from .const import CONF_ALLOW_LLM_MUTATIONS\n',
+              'from .const import (\n    CONF_ALLOW_LLM_MUTATIONS,\n    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,\n)\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              'from .library_summary_llm import LibrarySummaryPlexTool\n',
+              'from .discover_watchlist_llm import (\n    AddToWatchlistPlexTool,\n    DiscoverSearchPlexTool,\n    RemoveFromWatchlistPlexTool,\n)\nfrom .library_summary_llm import LibrarySummaryPlexTool\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '_LIBRARY_SUMMARY_PROMPT = (\n',
+              '_DISCOVER_PROMPT = (\n    " Use discover_search for movies/shows in Plex Discover, especially titles that may "\n    "not exist on the local server. Discover and Watchlist are scoped to the configured "\n    "plex.tv account rather than the household default Plex user."\n)\n_WATCHLIST_MUTATION_PROMPT = (\n    " add_to_watchlist and remove_from_watchlist change the configured plex.tv account: "\n    "use them only for an explicit user request and only with the exact guid and title "\n    "returned by discover_search or other Plex Extended Watchlist data. Never invent or "\n    "modify a Discover guid."\n)\n_LIBRARY_SUMMARY_PROMPT = (\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '    mutation_clients = {\n        label: client\n        for label, client in clients.items()\n        if bool(client.entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False))\n    }\n\n',
+              '    mutation_clients = {\n        label: client\n        for label, client in clients.items()\n        if bool(client.entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False))\n    }\n    watchlist_mutation_clients = {\n        label: client\n        for label, client in clients.items()\n        if bool(\n            client.entry.options.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)\n        )\n    }\n\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '            ActiveStreamsPlexTool(clients),\n            LibrarySummaryPlexTool(clients),\n',
+              '            ActiveStreamsPlexTool(clients),\n            LibrarySummaryPlexTool(clients),\n            DiscoverSearchPlexTool(clients),\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '    prompt = result.prompt\n',
+              '    if watchlist_mutation_clients:\n        force_server_selector = len(clients) > 1\n        tools.extend(\n            [\n                AddToWatchlistPlexTool(\n                    watchlist_mutation_clients,\n                    force_server_selector=force_server_selector,\n                ),\n                RemoveFromWatchlistPlexTool(\n                    watchlist_mutation_clients,\n                    force_server_selector=force_server_selector,\n                ),\n            ]\n        )\n\n    prompt = result.prompt\n',
+          )
+          replace(
+              "custom_components/plex_extended/llm.py",
+              '    prompt = f"{prompt or \'\'}{_ACTIVE_STREAMS_PROMPT}{_LIBRARY_SUMMARY_PROMPT}"\n',
+              '    prompt = (\n        f"{prompt or \'\'}{_ACTIVE_STREAMS_PROMPT}{_LIBRARY_SUMMARY_PROMPT}"\n        f"{_DISCOVER_PROMPT}"\n        f"{_WATCHLIST_MUTATION_PROMPT if watchlist_mutation_clients else \'\'}"\n    )\n',
+          )
+
+          # Options strings and translations.
+          for path in (
+              "custom_components/plex_extended/strings.json",
+              "custom_components/plex_extended/translations/en.json",
+          ):
+              replace(
+                  path,
+                  '"description": "Choose the default Plex user and whether this server contributes native Plex Extended tools to Assist. Watch-state writes remain a separate opt-in.",',
+                  '"description": "Choose the default Plex user and whether this server contributes native Plex Extended tools to Assist. Watch-state and account Watchlist writes are separate opt-ins.",',
+              )
+              replace(
+                  path,
+                  '"allow_llm_mutations": "Allow Assist to change Plex watch state"\n',
+                  '"allow_llm_mutations": "Allow Assist to change Plex watch state",\n          "allow_llm_watchlist_mutations": "Allow Assist to change Plex Watchlist"\n',
+              )
+              replace(
+                  path,
+                  '"allow_llm_mutations": "When native Assist tools are enabled, this additionally exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of either setting."\n',
+                  '"allow_llm_mutations": "When native Assist tools are enabled, this additionally exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of either setting.",\n          "allow_llm_watchlist_mutations": "When native Assist tools are enabled, this exposes add/remove Plex Watchlist tools for the configured plex.tv account. It is disabled by default and is separate from household-user watch-state writes."\n',
+              )
+
+          # Privacy-safe diagnostics and advertised capabilities.
+          replace(
+              "custom_components/plex_extended/diagnostics.py",
+              '    CONF_ALLOW_LLM_MUTATIONS,\n',
+              '    CONF_ALLOW_LLM_MUTATIONS,\n    CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,\n',
+          )
+          replace(
+              "custom_components/plex_extended/diagnostics.py",
+              '    "search",\n',
+              '    "search",\n    "discover_search",\n',
+          )
+          replace(
+              "custom_components/plex_extended/diagnostics.py",
+              '    "watchlist",\n',
+              '    "watchlist",\n    "add_to_watchlist",\n    "remove_from_watchlist",\n',
+          )
+          replace(
+              "custom_components/plex_extended/diagnostics.py",
+              '            "assist_watch_state_mutations_enabled": bool(\n                entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            ),\n',
+              '            "assist_watch_state_mutations_enabled": bool(\n                entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False)\n            ),\n            "assist_watchlist_mutations_enabled": bool(\n                entry.options.get(CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False)\n            ),\n',
+          )
+
+          # Developer Tools action metadata.
+          services = Path("custom_components/plex_extended/services.yaml")
+          text = services.read_text()
+          anchor = "\nwatchlist:\n"
+          if anchor not in text:
+              raise SystemExit("watchlist services.yaml anchor missing")
+          discover_block = '''
+discover_search:
+  name: Search Plex Discover
+  description: Search Plex Discover for movies or TV shows, including titles not present on the local Plex server. Returns exact Discover GUIDs for safe Watchlist follow-up actions.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended connection whose configured plex.tv account is used.
+      selector:
+        config_entry:
+          integration: plex_extended
+    query:
+      name: Query
+      required: true
+      selector:
+        text:
+    media_type:
+      name: Media type
+      selector:
+        select:
+          options:
+            - movie
+            - show
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    match_local:
+      name: Match to local library
+      description: Optionally check each Discover result against the configured local server using its Plex GUID. Disabled by default to avoid one local lookup per result.
+      default: false
+      selector:
+        boolean:
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+'''
+          text = text.replace(anchor, "\n" + discover_block + anchor, 1)
+          mutation_anchor = "\nlist_libraries:\n"
+          if mutation_anchor not in text:
+              raise SystemExit("list_libraries services.yaml anchor missing")
+          mutation_block = '''
+add_to_watchlist:
+  name: Add to Plex Watchlist
+  description: Add one exact Plex Discover movie/show to the configured plex.tv account's Watchlist. Requires the GUID and title returned by Search Plex Discover; the GUID is the authoritative identity.
+  fields: &watchlist_mutation_fields
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended connection whose configured plex.tv account is changed.
+      selector:
+        config_entry:
+          integration: plex_extended
+    guid:
+      name: Discover GUID
+      description: Exact plex://movie/... or plex://show/... GUID returned by Search Plex Discover.
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      description: Title returned with the Discover GUID. Used only to re-fetch candidates; the write is allowed only when the GUID matches exactly.
+      required: true
+      selector:
+        text:
+    media_type:
+      name: Media type
+      description: Optional movie/show assertion. If supplied, it must match the Discover GUID.
+      selector:
+        select:
+          options:
+            - movie
+            - show
+
+remove_from_watchlist:
+  name: Remove from Plex Watchlist
+  description: Remove one exact Plex Discover movie/show from the configured plex.tv account's Watchlist. Requires an exact Discover GUID/title pair and verifies the result after the write.
+  fields: *watchlist_mutation_fields
+'''
+          services.write_text(text.replace(mutation_anchor, "\n" + mutation_block + mutation_anchor, 1))
+
+          # README feature/docs/tool list.
+          replace(
+              "README.md",
+              'native Home Assistant LLM tools for title search, structured library discovery,',
+              'native Home Assistant LLM tools for title search, Plex Discover search, structured library discovery,',
+          )
+          replace(
+              "README.md",
+              '- Exposes the configured Plex account\'s plex.tv Watchlist and can match Watchlist entries to local server media by Plex GUID.\n',
+              '- Exposes the configured Plex account\'s plex.tv Watchlist, Plex Discover search, and safe exact-GUID Watchlist add/remove actions.\n',
+          )
+          watchlist_heading = '### `plex_extended.watchlist`\n'
+          readme = Path("README.md")
+          text = readme.read_text()
+          if watchlist_heading not in text:
+              raise SystemExit("README watchlist heading missing")
+          discover_docs = '''### `plex_extended.discover_search`
+
+Searches Plex Discover rather than only the configured local library, so it can resolve movies/shows that are not on the server. Results carry the exact Plex Discover `guid` used by the safe Watchlist mutation actions.
+
+```yaml
+action: plex_extended.discover_search
+data:
+  query: 28 Years Later
+  media_type: movie
+  limit: 10
+response_variable: plex_discover
+```
+
+`match_local` is disabled by default because local matching can require a GUID lookup for every Discover result. Enable it when you specifically need to know whether each online title is already present on this server.
+
+'''
+          text = text.replace(watchlist_heading, discover_docs + watchlist_heading, 1)
+          list_heading = '### `plex_extended.list_libraries`\n'
+          if list_heading not in text:
+              raise SystemExit("README list_libraries heading missing")
+          mutation_docs = '''### `plex_extended.add_to_watchlist` / `plex_extended.remove_from_watchlist`
+
+Explicitly change the configured plex.tv account's Watchlist. Both actions require the exact Discover `guid` plus the corresponding title returned by `discover_search`/Watchlist data. The title is used only to re-fetch candidates; the mutation proceeds only when Plex returns the **exact GUID**, so a stale or wrong GUID never falls back to a title match.
+
+The actions are idempotent and verify Watchlist state after any write. They are account-level operations: the integration's Default Plex user does not apply.
+
+Manual Home Assistant actions are always available. Native Assist Watchlist-write tools are separately opt-in under **Configure → Allow Assist to change Plex Watchlist** and default off.
+
+'''
+          text = text.replace(list_heading, mutation_docs + list_heading, 1)
+          text = text.replace(
+              '- `plex_extended__search`\n',
+              '- `plex_extended__search`\n- `plex_extended__discover_search`\n',
+              1,
+          )
+          text = text.replace(
+              '- `plex_extended__watchlist`\n',
+              '- `plex_extended__watchlist`\n- `plex_extended__add_to_watchlist` *(only when Assist Watchlist writes are enabled)*\n- `plex_extended__remove_from_watchlist` *(only when Assist Watchlist writes are enabled)*\n',
+              1,
+          )
+          text = text.replace(
+              '- "Do I have Alien on Plex?"\n',
+              '- "Do I have Alien on Plex?"\n- "Find 28 Years Later on Plex Discover and add it to my Watchlist."\n',
+              1,
+          )
+          text = text.replace(
+              'The LLM guidance distinguishes fuzzy search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist.',
+              'The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist.',
+              1,
+          )
+          text = text.replace(
+              'Watch-state mutation tools are **not exposed to Assist by default**.',
+              'Watch-state mutation tools and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins.',
+              1,
+          )
+          readme.write_text(text)
+
+          # Contract tests for the public HA/Assist surface and option separation.
+          Path("tests/test_discover_watchlist_contract.py").write_text('''"""Contract tests for Discover/Watchlist public exposure."""\n\nfrom pathlib import Path\n\nROOT = Path(__file__).parents[1]\nCOMPONENT = ROOT / "custom_components/plex_extended"\n\ndef test_actions_use_correct_response_contracts() -> None:\n    source = (COMPONENT / "discover_watchlist_service.py").read_text()\n    assert "SERVICE_DISCOVER_SEARCH" in source\n    assert source.count("supports_response=SupportsResponse.OPTIONAL") == 2\n    assert "supports_response=SupportsResponse.ONLY" in source\n    assert 'vol.Required("guid")' in source\n    assert 'vol.Required("title")' in source\n\ndef test_watchlist_assist_write_permission_is_separate_and_default_off() -> None:\n    const = (COMPONENT / "const.py").read_text()\n    flow = (COMPONENT / "config_flow.py").read_text()\n    provider = (COMPONENT / "llm.py").read_text()\n    assert 'CONF_ALLOW_LLM_WATCHLIST_MUTATIONS: Final = "allow_llm_watchlist_mutations"' in const\n    assert "CONF_ALLOW_LLM_WATCHLIST_MUTATIONS, False" in flow\n    assert "watchlist_mutation_clients" in provider\n    assert "CONF_ALLOW_LLM_WATCHLIST_MUTATIONS" in provider\n    assert "AddToWatchlistPlexTool" in provider\n    assert "RemoveFromWatchlistPlexTool" in provider\n\ndef test_discover_read_tool_is_not_gated_by_write_permission() -> None:\n    provider = (COMPONENT / "llm.py").read_text()\n    assert "DiscoverSearchPlexTool(clients)" in provider\n\ndef test_developer_tools_docs_and_diagnostics_are_present() -> None:\n    services = (COMPONENT / "services.yaml").read_text()\n    diagnostics = (COMPONENT / "diagnostics.py").read_text()\n    readme = (ROOT / "README.md").read_text()\n    for name in ("discover_search", "add_to_watchlist", "remove_from_watchlist"):\n        assert f"\\n{name}:\\n" in services\n        assert name in diagnostics\n    assert "plex_extended.discover_search" in readme\n    assert "plex_extended.add_to_watchlist" in readme\n    assert "plex_extended__discover_search" in readme\n\ndef test_temporary_pr13_helper_is_removed() -> None:\n    assert not (ROOT / ".github/workflows/pr13-patch.yml").exists()\n''')
+
+          Path(".github/workflows/pr13-patch.yml").unlink()
+      - name: Commit wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: expose Plex Discover and safe Watchlist writes"
+          git push origin HEAD:feat/pr13-discover-watchlist-mutations
