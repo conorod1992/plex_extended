@@ -33,8 +33,8 @@ SPECS = (
     VersionSpec(
         "Home Assistant integration",
         "custom_components/plex_extended/manifest.json",
-        r'^  "version": "([^"]+)"$',
-        r'(^  "version": ")[^"]+("$)',
+        r'^  "version": "([^"]+)"[,]?$',
+        r'(^  "version": ")[^"]+("[,]?$)',
         re.MULTILINE,
     ),
 )
