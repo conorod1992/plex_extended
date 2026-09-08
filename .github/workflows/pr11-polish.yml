@@ -1,0 +1,209 @@
+name: Apply PR11 metadata and docs
+
+on:
+  push:
+    branches:
+      - feat/pr11-library-summary
+    paths:
+      - .github/workflows/pr11-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/pr11-library-summary
+      - name: Apply action metadata, docs, and test correction
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          from textwrap import dedent
+
+          # Developer Tools action metadata: derive the filter fields from the
+          # existing Query library metadata so the two public surfaces stay aligned.
+          services = Path("custom_components/plex_extended/services.yaml")
+          text = services.read_text()
+          if "\nlibrary_summary:\n" not in text:
+              start = text.index("query_library:")
+              end = text.index("\nwatch_status:\n", start)
+              block = text[start:end].rstrip()
+              lines = block.splitlines()
+              fields_index = lines.index("  fields:")
+              field_lines = lines[fields_index + 1 :]
+              excluded = {
+                  "sort_by",
+                  "sort_order",
+                  "limit",
+                  "include_summary",
+                  "include_technical",
+              }
+              kept = []
+              i = 0
+              while i < len(field_lines):
+                  match = re.match(r"^    ([a-zA-Z0-9_]+):$", field_lines[i])
+                  if not match:
+                      kept.append(field_lines[i])
+                      i += 1
+                      continue
+                  name = match.group(1)
+                  j = i + 1
+                  while j < len(field_lines) and not re.match(
+                      r"^    [a-zA-Z0-9_]+:$", field_lines[j]
+                  ):
+                      j += 1
+                  if name not in excluded:
+                      kept.extend(field_lines[i:j])
+                  i = j
+
+              extras = dedent('''
+                  facets:
+                    name: Facets
+                    description: Optional compact breakdowns of the matching items. Multi-valued facets count an item once in each value it belongs to.
+                    selector:
+                      select:
+                        multiple: true
+                        options:
+                          - genre
+                          - year
+                          - decade
+                          - resolution
+                          - watched_state
+                          - content_rating
+                          - studio
+                          - collection
+                  facet_limit:
+                    name: Facet value limit
+                    description: Maximum number of values returned for each requested facet, ordered by count.
+                    default: 20
+                    selector:
+                      number:
+                        min: 1
+                        max: 50
+                        mode: box
+                  include_total_duration:
+                    name: Include total duration
+                    description: Sum duration for matching items and report how many items did or did not expose duration metadata.
+                    default: false
+                    selector:
+                      boolean:
+              ''').strip("\n")
+              extras = "\n".join("    " + line if line else line for line in extras.splitlines())
+              summary = "\n".join(
+                  [
+                      "library_summary:",
+                      "  name: Library summary",
+                      "  description: Return an exact aggregate count for a structured Plex library query, optionally with facet breakdowns or total duration.",
+                      "  fields:",
+                      *kept,
+                      extras,
+                  ]
+              )
+              text = text[:end] + "\n\n" + summary + text[end:]
+              services.write_text(text)
+
+          readme = Path("README.md")
+          text = readme.read_text()
+          text = text.replace(
+              "structured library discovery, TV viewing progress",
+              "structured library discovery, aggregate library summaries, TV viewing progress",
+              1,
+          )
+          highlight = "- Supports fuzzy title search and typed advanced library filtering.\n"
+          if "aggregate counts and facet breakdowns" not in text:
+              assert highlight in text
+              text = text.replace(
+                  highlight,
+                  highlight
+                  + "- Supports exact aggregate counts and facet breakdowns without returning large item lists.\n",
+                  1,
+              )
+
+          if "### `plex_extended.library_summary`" not in text:
+              anchor = "\n### `plex_extended.watch_status`\n"
+              assert anchor in text
+              docs = dedent('''
+
+              ### `plex_extended.library_summary`
+
+              Returns an exact aggregate count using the same structured filters as `query_library`, without returning a list of matching media. This is the preferred action for questions such as “how many unwatched horror movies do I have?” or “which decades are most represented in my movie library?”.
+
+              ```yaml
+              action: plex_extended.library_summary
+              data:
+                media_type: movie
+                genres:
+                  - Horror
+                watched_state: unwatched
+                facets:
+                  - decade
+                  - resolution
+                facet_limit: 10
+                include_total_duration: true
+              response_variable: plex_summary
+              ```
+
+              Supported facets are `genre`, `year`, `decade`, `resolution`, `watched_state`, `content_rating`, `studio`, and `collection`. Facets are ordered by descending count and carry `total_values` plus `truncated`, so a limited “top values” response cannot be mistaken for the complete distribution. Multi-valued facets such as genre, collection, and resolution count one item once in each distinct value it belongs to, so those facet counts can legitimately sum above the overall media count.
+
+              Count-only requests that use Plex-native filters read Plex's filtered `totalSize` directly instead of downloading all matching media. Requests for facets, total duration, or criteria that require PlexAPI-side post-filtering materialize the exact matching set. Tag/technical facets hydrate metadata in bounded rating-key batches rather than triggering one reload per item.
+
+              When `include_total_duration` is enabled, the response includes `total_duration_minutes`, `duration_items`, and `duration_missing_items`; missing duration metadata is therefore explicit rather than silently treated as zero.
+              ''').rstrip()
+              text = text.replace(anchor, docs + anchor, 1)
+
+          llm_line = "- `plex_extended__query_library`\n"
+          if "- `plex_extended__library_summary`" not in text:
+              assert llm_line in text
+              text = text.replace(
+                  llm_line,
+                  llm_line + "- `plex_extended__library_summary`\n",
+                  1,
+              )
+
+          example = '- "Find an unwatched horror movie from the 1980s around 90 to 120 minutes."\n'
+          if '- "How many unwatched horror movies do I have?"' not in text:
+              assert example in text
+              text = text.replace(
+                  example,
+                  example
+                  + '- "How many unwatched horror movies do I have?"\n'
+                  + '- "Which decades have the most movies in my library?"\n',
+                  1,
+              )
+
+          text = text.replace(
+              "The LLM guidance distinguishes fuzzy search, structured library querying, TV progress, recent-media windows, collections/playlists, and account-level Watchlist.",
+              "The LLM guidance distinguishes fuzzy search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist.",
+              1,
+          )
+          text = text.replace(
+              "PlexExtendedClient + user context + query/progress/recent/list backends",
+              "PlexExtendedClient + user context + query/summary/progress/recent/list backends",
+              1,
+          )
+          text = text.replace(
+              "- **Plex Extended:** querying the library, metadata, recent additions, collections/playlists/Watchlist, active playback sessions, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.",
+              "- **Plex Extended:** querying and aggregating the library, metadata, recent additions, collections/playlists/Watchlist, active playback sessions, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.",
+              1,
+          )
+          readme.write_text(text)
+
+          tests = Path("tests/test_library_summary.py")
+          text = tests.read_text()
+          text = text.replace('assert result["plex_user"] == "Conor"', 'assert result["user"] == "Conor"')
+          text = text.replace('assert result["plex_user_id"] == "7"', 'assert result["user_id"] == 7')
+          tests.write_text(text)
+
+          Path(".github/workflows/pr11-polish.yml").unlink()
+          PY
+      - name: Commit polished PR11 surface
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: expose aggregate library summaries"
+          git push origin HEAD:feat/pr11-library-summary
