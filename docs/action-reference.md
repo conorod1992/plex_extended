@@ -171,7 +171,9 @@ response_variable: plex_related
 
 `rating_key` must be the exact positive numeric local ID returned by another Plex Extended read action. Optional `library` / `library_id` values assert the seed item's library; they do not fuzzily resolve it.
 
-Plex Extended preserves Plex's hub categories/order rather than inventing a global recommendation score. Online/provider objects are excluded; returned recommendations must correspond to concrete local Plex media. Plex Extended does not automatically expand hubs that report additional results, and truncation/more state is included in the response.
+Plex Extended preserves Plex's hub categories/order rather than inventing a global recommendation score. Provider/online objects are excluded; returned recommendations must correspond to concrete local Plex media.
+
+Plex Extended deliberately does not auto-expand hubs that Plex says contain more results. Each hub reports `more_available_from_plex` and `results_truncated`, while the top-level response reports `hubs_truncated` independently. Items are deduplicated within a hub but may legitimately appear in several different hubs because that preserves Plex's explanation for why an item is related.
 
 ## TV progress and recency
 
