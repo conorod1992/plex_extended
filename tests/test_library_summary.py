@@ -331,8 +331,8 @@ def test_default_user_context_drives_summary_query() -> None:
     assert owner.switch_calls == ["Conor"]
     assert owner.query_calls == []
     assert len(conor.query_calls) == 1
-    assert result["plex_user"] == "Conor"
-    assert result["plex_user_id"] == "7"
+    assert result["user"] == "Conor"
+    assert result["user_id"] == 7
 
 
 def test_missing_total_size_falls_back_to_exact_materialized_count() -> None:
