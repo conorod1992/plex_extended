@@ -14,6 +14,7 @@ from .active_streams_llm import ActiveStreamsPlexTool
 from .client import PlexExtendedClient
 from .const import CONF_ALLOW_LLM_MUTATIONS
 from .library_summary_llm import LibrarySummaryPlexTool
+from .llm_policy import enabled_llm_clients
 from .llm_tools import (
     MarkUnwatchedPlexTool,
     MarkWatchedPlexTool,
@@ -90,14 +91,21 @@ def async_get_tools(
     if result is None:
         return None
 
-    clients = _loaded_clients(hass)
+    clients = enabled_llm_clients(_loaded_clients(hass))
+    if not clients:
+        return None
+
     mutation_clients = {
         label: client
         for label, client in clients.items()
         if bool(client.entry.options.get(CONF_ALLOW_LLM_MUTATIONS, False))
     }
 
-    tools = [tool for tool in result.tools if tool.name not in _MUTATION_TOOL_NAMES]
+    tools = [
+        type(tool)(clients)
+        for tool in result.tools
+        if tool.name not in _MUTATION_TOOL_NAMES
+    ]
     tools.extend(
         [
             ActiveStreamsPlexTool(clients),

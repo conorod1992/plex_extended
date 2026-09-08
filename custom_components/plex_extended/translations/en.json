@@ -52,13 +52,15 @@
     "step": {
       "init": {
         "title": "Plex Extended options",
-        "description": "Choose the default Plex user for viewing state. You can also optionally allow Assist LLMs to mark items watched or unwatched; this write access is disabled by default.",
+        "description": "Choose the default Plex user and whether this server contributes native Plex Extended tools to Assist. Watch-state writes remain a separate opt-in.",
         "data": {
           "default_user_id": "Default Plex user",
+          "enable_llm_tools": "Enable native Assist tools",
           "allow_llm_mutations": "Allow Assist to change Plex watch state"
         },
         "data_description": {
-          "allow_llm_mutations": "When enabled, Plex Extended exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of this setting."
+          "enable_llm_tools": "When disabled, this Plex server is omitted from all native Plex Extended Assist tools. Manual Home Assistant actions remain available. Existing installations default to enabled.",
+          "allow_llm_mutations": "When native Assist tools are enabled, this additionally exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of either setting."
         }
       }
     },

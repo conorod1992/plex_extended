@@ -11,7 +11,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Supports a manual server URL + token setup as a fallback.
 - Uses its own Plex client identity and can coexist with Home Assistant's built-in Plex integration.
 - Exposes query results as **response data**, avoiding huge list-like sensor attributes.
-- Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.
+- Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API, with per-server exposure control.
 - Supports fuzzy title search and typed advanced library filtering.
 - Supports exact aggregate counts and facet breakdowns without returning large item lists.
 - Exposes episode-level TV progress, last watched/current episode, and the next episode to watch.
@@ -75,6 +75,12 @@ response_variable: plex_progress
 Plex user switching requires the Plex account/token used to configure Plex Extended to be the server owner/admin. If the integration is connected to a shared server as a non-owner, the normal server context can still be used, but Plex Extended cannot switch that connection into another Plex user's context.
 
 The Configure screen represents the currently authenticated Plex account as **Configured Plex account** and lists alternate household users separately. User-scoped Plex server connections are cached after the first successful switch.
+
+### Native Assist tool exposure
+
+Open **Settings → Devices & services → Plex Extended → Configure** to control whether a server contributes native Plex Extended tools to Home Assistant Assist. **Enable native Assist tools** is on by default for backwards compatibility. Turning it off removes that server from all Plex Extended native LLM tools while leaving every manual Home Assistant action available.
+
+In a multi-server setup, disabled entries are omitted entirely from the LLM tools' server selector. If every Plex Extended entry disables native Assist tools, Plex Extended contributes no LLM tools. The separate **Allow Assist to change Plex watch state** option still defaults off; it has an effect only while native Assist tools are enabled for that server.
 
 ### Plex Watchlist is different
 
