@@ -48,7 +48,7 @@ def _discover_search(
 
     max_results = client._normalize_limit(criteria.get("limit", DEFAULT_LIMIT))
     include_summary = bool(criteria.get("include_summary", True))
-    match_local = bool(criteria.get("match_local", True))
+    match_local = bool(criteria.get("match_local", False))
 
     items = list(
         account.searchDiscover(
@@ -168,7 +168,7 @@ def _set_watchlist_state(
             server,
             item,
             include_summary=False,
-            match_local=True,
+            match_local=False,
         ),
         "guid": guid,
         "media_type": guid_type,
