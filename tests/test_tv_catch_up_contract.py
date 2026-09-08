@@ -21,11 +21,13 @@ def test_action_and_llm_share_window_and_user_controls() -> None:
     adapter = (COMPONENT / "tv_catch_up_service.py").read_text()
     tool = (COMPONENT / "tv_catch_up_llm.py").read_text()
 
+    assert '"user"' in adapter
+    assert '"user_id"' in adapter
+    assert "self._user_fields()" in tool
+
     for field in (
         '"library"',
         '"library_id"',
-        '"user"',
-        '"user_id"',
         '"since"',
         '"before"',
         '"within_days"',
