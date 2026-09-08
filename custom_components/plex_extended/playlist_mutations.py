@@ -61,7 +61,7 @@ def _assert_regular_playlist(playlist: Any) -> None:
     """Reject smart/radio playlists and incomplete playlist metadata."""
     if bool(getattr(playlist, "smart", False)):
         raise PlexExtendedError("Smart Plex playlists cannot be edited item-by-item")
-    if bool(getattr(playlist, "radio", False)):
+    if bool(getattr(playlist, "radio", False))):
         raise PlexExtendedError("Plex radio playlists cannot be edited item-by-item")
     playlist_type = str(getattr(playlist, "playlistType", "") or "")
     if playlist_type not in {"audio", "video", "photo"}:
@@ -259,18 +259,34 @@ def _remove_from_playlist(
     removed: list[dict[str, Any]] = []
     absent: list[str] = []
     for key in keys:
+        initial = [item for item in playlist.items() if _item_key(item) == key]
+        if not initial:
+            absent.append(key)
+            continue
+
         occurrences = 0
-        while True:
+        for _ in range(len(initial)):
             matching = [item for item in playlist.items() if _item_key(item) == key]
             if not matching:
                 break
+            before = len(matching)
             playlist.removeItems(matching[0])
-            occurrences += 1
             playlist.reload()
-        if occurrences:
-            removed.append({"rating_key": key, "occurrences": occurrences})
-        else:
-            absent.append(key)
+            after = sum(1 for item in playlist.items() if _item_key(item) == key)
+            if after >= before:
+                raise PlexExtendedError(
+                    f"Plex did not confirm removed playlist item: {key}"
+                )
+            occurrences += before - after
+
+        remaining_for_key = sum(
+            1 for item in playlist.items() if _item_key(item) == key
+        )
+        if remaining_for_key:
+            raise PlexExtendedError(
+                f"Plex did not confirm removed playlist item: {key}"
+            )
+        removed.append({"rating_key": key, "occurrences": occurrences})
 
     remaining = set(_playlist_keys(playlist))
     failed = [key for key in keys if key in remaining]
