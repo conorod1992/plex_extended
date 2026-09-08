@@ -17,6 +17,7 @@ from .discover_watchlist_service import async_setup_discover_watchlist_services
 from .library_summary_service import async_setup_library_summary_service
 from .playlist_mutations_service import async_setup_playlist_mutation_services
 from .services import async_setup_services
+from .tv_catch_up_service import async_setup_tv_catch_up_service
 
 PlexExtendedConfigEntry = ConfigEntry[PlexExtendedClient]
 
@@ -28,6 +29,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await async_setup_library_summary_service(hass)
     await async_setup_discover_watchlist_services(hass)
     await async_setup_playlist_mutation_services(hass)
+    await async_setup_tv_catch_up_service(hass)
     return True
 
 
