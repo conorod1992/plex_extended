@@ -6,6 +6,17 @@ ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
 
 
+def _documentation() -> str:
+    return "\n".join(
+        path.read_text()
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "action-reference.md",
+            ROOT / "docs" / "assist-reference.md",
+        )
+    )
+
+
 def test_manual_playlist_mutations_are_optional_response_actions() -> None:
     adapter = (COMPONENT / "playlist_mutations_service.py").read_text()
     setup = (COMPONENT / "__init__.py").read_text()
@@ -41,12 +52,12 @@ def test_playlist_assist_writes_have_separate_default_off_permission() -> None:
 def test_docs_diagnostics_and_metadata_expose_all_three_mutations() -> None:
     yaml = (COMPONENT / "services.yaml").read_text()
     diagnostics = (COMPONENT / "diagnostics.py").read_text()
-    readme = (ROOT / "README.md").read_text()
+    docs = _documentation()
     for name in ("create_playlist", "add_to_playlist", "remove_from_playlist"):
         assert f"\n{name}:\n" in yaml
         assert f'"{name}"' in diagnostics
-        assert f"plex_extended.{name}" in readme
-        assert f"plex_extended__{name}" in readme
+        assert f"plex_extended.{name}" in docs
+        assert f"plex_extended__{name}" in docs
     assert '"assist_playlist_mutations_enabled"' in diagnostics
 
 

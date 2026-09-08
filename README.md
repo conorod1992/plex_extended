@@ -1,544 +1,459 @@
 # Plex Extended
 
-Plex Extended is a Home Assistant custom integration that exposes Plex as a queryable media library rather than only as a media player.
+Plex Extended is a Home Assistant custom integration for **querying, understanding, and safely changing selected parts of Plex**.
 
-It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, Plex Discover search, structured library discovery, aggregate library summaries, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, active playback sessions, metadata, libraries, and users.
+Home Assistant's built-in Plex integration is excellent for media players and playback. Plex Extended complements it with response-data actions and native Assist/LLM tools for questions and automations such as:
 
-## Highlights
+- “Do I have *Alien* on Plex?”
+- “Find an unwatched horror film from the 1980s under two hours.”
+- “Where am I up to in *Resident Alien*?”
+- “What new TV episodes do I have to catch up on?”
+- “What was added this week?”
+- “Who is streaming Plex right now, and is anything transcoding?”
+- “How many 4K movies do I have?”
+- “What's in my Christmas playlist?”
+- “Find *28 Years Later* on Plex Discover and add it to my Watchlist.”
 
-- **Connect with Plex** from the Home Assistant config flow; no manual token extraction is normally required.
-- Discovers Plex Media Servers linked to the authorized Plex account and lets the user choose a server.
-- Supports a manual server URL + token setup as a fallback.
-- Uses its own Plex client identity and can coexist with Home Assistant's built-in Plex integration.
-- Exposes query results as **response data**, avoiding huge list-like sensor attributes.
-- Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API, with per-server exposure control.
-- Supports fuzzy title search and typed advanced library filtering.
-- Supports exact aggregate counts and facet breakdowns without returning large item lists.
-- Exposes episode-level TV progress, last watched/current episode, and the next episode to watch.
-- Exposes current Plex playback sessions, including player/progress and direct-play/direct-stream/transcode details.
-- Supports bounded recent-media queries and optional TV show/season grouping for large imports.
-- Exposes Plex collections and playlists, including their items.
-- Exposes the configured Plex account's plex.tv Watchlist, Plex Discover search, and safe exact-GUID Watchlist add/remove actions.
-- Supports a configurable **default Plex user** for personalized viewing state, with per-query overrides.
-- Supports multiple Plex servers.
-- Supports stable Plex library/user/collection/playlist rating keys as well as convenient names.
-- Provides explicit watched/unwatched update actions; Assist write tools are opt-in and disabled by default.
-- Never returns Plex tokens, tokenized URLs, or local media file paths in action/tool results.
-- Provides privacy-safe Home Assistant diagnostics.
+It does **not** replace or modify Home Assistant's built-in Plex integration. Both can be installed against the same Plex server.
+
+> **Home Assistant:** Plex Extended is tested against Home Assistant 2026.8+.
+
+## What Plex Extended can do
+
+### Search and understand your local library
+
+- fuzzy title search;
+- structured filtering by genre, year, runtime, ratings, watched state, resolution/HDR, codecs, audio/subtitle languages, labels and more;
+- exact counts and facet summaries without returning huge item lists;
+- Plex-native related/similar local media;
+- item metadata and technical details.
+
+### Understand viewing state
+
+- episode-level progress for a TV show;
+- next episode and in-progress episode;
+- cross-show TV catch-up lists;
+- Continue Watching and On Deck;
+- recently watched history;
+- recently added media;
+- per-user watched/progress context.
+
+### Browse Plex organization features
+
+- libraries and users;
+- collections and collection items;
+- playlists and playlist items;
+- configured plex.tv account Watchlist;
+- Plex Discover search, including media not on the local server.
+
+### Make narrowly scoped changes
+
+Manual Home Assistant actions can:
+
+- mark an exact Plex item watched or unwatched;
+- add/remove exact Plex Discover items from the configured account's Watchlist;
+- create and safely modify regular Plex playlists.
+
+Potentially mutating **Assist** tools are separately opt-in and disabled by default.
+
+### Inspect current playback
+
+- active sessions;
+- Plex user and media progress;
+- local/remote/relay state;
+- direct play, direct stream or transcode classification;
+- source quality and session bandwidth metadata.
+
+Plex Extended does not provide playback control.
 
 ## Installation
 
-### HACS custom repository
+### HACS
 
-1. Add `https://github.com/conorod1992/plex_extended` to HACS as an **Integration** custom repository.
-2. Install **Plex Extended**.
-3. Restart Home Assistant.
-4. Go to **Settings → Devices & services → Add integration → Plex Extended**.
-5. Choose **Connect with Plex**.
-6. Authorize the integration on Plex's website and select the desired server if more than one is available.
+Plex Extended is currently installed as a HACS custom repository:
 
-For development or manual installation, copy `custom_components/plex_extended` into `/config/custom_components/plex_extended` and restart Home Assistant.
+1. Open **HACS** in Home Assistant.
+2. Add `https://github.com/conorod1992/plex_extended` as a custom repository of type **Integration**.
+3. Install **Plex Extended**.
+4. Restart Home Assistant.
+5. Go to **Settings → Devices & services → Add integration → Plex Extended**.
+6. Choose **Connect with Plex**.
+7. Approve the authorization request on Plex's website.
+8. If your account can access more than one Plex Media Server, choose the server you want to add.
 
-The integration uses the same `PlexAPI` and `plexauth` dependency versions as the current Home Assistant core Plex integration to reduce dependency conflicts when both are installed.
+You normally **do not need to find or paste a Plex token manually**.
 
-## Plex user context
+### Manual installation
 
-Viewing state in Plex is user-specific. Plex Extended can therefore use a selected Plex user's state consistently wherever returned data depends on viewing state, including watched/unwatched filtering, search/detail metadata, recently added metadata, TV progress, Continue Watching, On Deck, collections/playlists, watch history, and explicit watch-state updates.
+Copy:
 
-Open **Settings → Devices & services → Plex Extended → Configure** to choose a **Default Plex user**. If no default user is selected, Plex Extended uses the configured server/account context.
-
-The following capabilities use the configured default Plex user:
-
-- `plex_extended.search` for returned watched/progress metadata
-- `plex_extended.query_library`, including watched, unwatched, in-progress and last-viewed state
-- `plex_extended.watch_status`
-- `plex_extended.recently_added` for returned watched/progress metadata
-- `plex_extended.recently_watched`
-- `plex_extended.continue_watching`
-- `plex_extended.on_deck`
-- `plex_extended.media_details` for returned watched/progress metadata
-- `plex_extended.mark_watched` / `plex_extended.mark_unwatched` for explicit viewing-state changes
-- `plex_extended.list_collections` / `plex_extended.collection_items`
-- `plex_extended.list_playlists` / `plex_extended.playlist_items`
-- the equivalent native LLM tools
-
-Each of those actions/tools accepts optional `user` and `user_id` values. An explicit value overrides the configured default for that call. `user_id` is the stable local Plex account ID returned by `plex_extended.list_users`; if both name and ID are supplied they must identify the same user.
-
-```yaml
-action: plex_extended.watch_status
-data:
-  title: Resident Alien
-  user: Conor
-response_variable: plex_progress
+```text
+custom_components/plex_extended
 ```
 
-Plex user switching requires the Plex account/token used to configure Plex Extended to be the server owner/admin. If the integration is connected to a shared server as a non-owner, the normal server context can still be used, but Plex Extended cannot switch that connection into another Plex user's context.
+to:
 
-The Configure screen represents the currently authenticated Plex account as **Configured Plex account** and lists alternate household users separately. User-scoped Plex server connections are cached after the first successful switch.
+```text
+/config/custom_components/plex_extended
+```
 
-### Native Assist tool exposure
+and restart Home Assistant. Then add **Plex Extended** from **Settings → Devices & services**.
 
-Open **Settings → Devices & services → Plex Extended → Configure** to control whether a server contributes native Plex Extended tools to Home Assistant Assist. **Enable native Assist tools** is on by default for backwards compatibility. Turning it off removes that server from all Plex Extended native LLM tools while leaving every manual Home Assistant action available.
+A manual Plex server URL + token setup option is also available as a fallback when the normal Plex website authorization flow cannot be used.
 
-In a multi-server setup, disabled entries are omitted entirely from the LLM tools' server selector. If every Plex Extended entry disables native Assist tools, Plex Extended contributes no LLM tools. The separate **Allow Assist to change Plex watch state** option still defaults off; it has an effect only while native Assist tools are enabled for that server.
+## Your first five minutes
 
-### Plex Watchlist is different
+After setup, the quickest way to confirm everything is working is **Developer Tools → Actions**.
 
-Plex's Watchlist is associated with the authenticated **plex.tv account**, not the selected local household-user context. `plex_extended.watchlist` therefore always uses the Plex account that configured that Plex Extended server entry. The Default Plex user setting and per-call `user`/`user_id` selectors deliberately do not apply to Watchlist.
+### 1. Test the connection
 
-## Actions
+Run:
 
-All Plex Extended actions return response data and can therefore be used with `response_variable` in scripts and automations.
+```yaml
+action: plex_extended.test_connection
+```
 
-### `plex_extended.search`
+### 2. Search your library
 
-Search the user's Plex library by title/name. Plex's hub search provides partial/fuzzy matching and contextual relevance ordering.
+Run:
 
 ```yaml
 action: plex_extended.search
 data:
   query: Alien
-  search_types:
-    - movie
-    - show
-  limit: 10
-  include_summary: true
-  include_technical: false
-response_variable: plex_results
 ```
 
-For mixed media types, Plex Extended performs a single Plex hub search and filters the returned media afterwards, preserving Plex's cross-category relevance ordering. Optional fields include `library`, `library_id`, `user`, `user_id`, and `config_entry_id`.
+Home Assistant displays the returned response data directly in Developer Tools.
 
-### `plex_extended.query_library`
-
-Run a structured media query rather than a fuzzy title search. This is intended for discovery, filtering, recommendations, and questions such as "find an unwatched 4K horror movie from the 1980s under two hours".
-
-```yaml
-action: plex_extended.query_library
-data:
-  media_type: movie
-  genres:
-    - Horror
-  year_min: 1980
-  year_max: 1989
-  watched_state: unwatched
-  duration_min_minutes: 90
-  duration_max_minutes: 120
-  resolutions:
-    - 4k
-  hdr: hdr
-  audience_rating_min: 7
-  sort_by: audience_rating
-  sort_order: desc
-  limit: 10
-response_variable: plex_results
-```
-
-Supported typed criteria include partial title; genre; actor/director/collection/studio/content rating; audio/subtitle language; labels and country; duplicate/matched state; exact year/range/decade; watched/unwatched/in-progress; resolution/HDR; video/audio codec, container and audio-channel count; critic/audience/user rating ranges; runtime; added/last-viewed dates; and sorting.
-
-Audio/subtitle language, label, country, duplicate and unmatched criteria use Plex's native server filters. Codec/container/channel criteria use PlexAPI's documented XML post-filtering after the server-native candidate set, so very broad technical queries can require Plex to return more metadata than a purely server-native query.
-
-`media_type` can be `movie`, `show`, `season`, `episode`, `artist`, `album`, or `track`. If no library is supplied, Plex Extended automatically selects one only when exactly one compatible library exists. The action deliberately exposes a curated typed interface rather than arbitrary Plex filter dictionaries.
-
-
-### `plex_extended.library_summary`
-
-Returns an exact aggregate count using the same structured filters as `query_library`, without returning a list of matching media. This is the preferred action for questions such as “how many unwatched horror movies do I have?” or “which decades are most represented in my movie library?”.
-
-```yaml
-action: plex_extended.library_summary
-data:
-  media_type: movie
-  genres:
-    - Horror
-  watched_state: unwatched
-  facets:
-    - decade
-    - resolution
-  facet_limit: 10
-  include_total_duration: true
-response_variable: plex_summary
-```
-
-Supported facets are `genre`, `year`, `decade`, `resolution`, `watched_state`, `content_rating`, `studio`, `collection`, `label`, `country`, `audio_language`, `subtitle_language`, `video_codec`, `audio_codec`, `container`, and `audio_channels`. Facets are ordered by descending count and carry `total_values` plus `truncated`, so a limited “top values” response cannot be mistaken for the complete distribution. Multi-valued facets such as genre, collection, and resolution count one item once in each distinct value it belongs to, so those facet counts can legitimately sum above the overall media count.
-
-Count-only requests that use Plex-native filters read Plex's filtered `totalSize` directly instead of downloading all matching media. Requests for facets, total duration, or criteria that require PlexAPI-side post-filtering materialize the exact matching set. Tag/technical facets hydrate metadata in bounded rating-key batches rather than triggering one reload per item.
-
-When `include_total_duration` is enabled, the response includes `total_duration_minutes`, `duration_items`, and `duration_missing_items`; missing duration metadata is therefore explicit rather than silently treated as zero.
-### `plex_extended.watch_status`
-
-Return episode-level viewing progress for one TV show using either its stable Plex `rating_key` or a title.
+### 3. Try a useful viewing-state query
 
 ```yaml
 action: plex_extended.watch_status
 data:
   title: Resident Alien
-  include_specials: false
-  include_seasons: true
-  include_summary: false
-response_variable: plex_progress
 ```
 
-The response includes overall completion state, episode counts, completion percentage, last watched/current activity, the in-progress episode, next episode, and optionally per-season progress. Season 0/specials are excluded by default. Plex Extended prefers Plex's own On Deck result for the next episode and falls back to canonical episode order when necessary.
+### 4. Use the result in an automation or script
 
-
-### `plex_extended.tv_catch_up`
-
-Returns TV episodes the selected/default Plex user still has to watch, grouped by show. It is intended for cross-show questions such as “what new episodes do I have to catch up on?”; use `watch_status` instead for detailed progress in one specific show.
+Read/query actions return structured response data. In scripts and automations, capture it with `response_variable`:
 
 ```yaml
-action: plex_extended.tv_catch_up
+action: plex_extended.search
 data:
-  within_days: 14
-  include_specials: false
-  include_in_progress: true
-  limit: 10
-  episode_limit: 5
-response_variable: plex_catch_up
+  query: Alien
+response_variable: plex_results
 ```
 
-The optional `since`, `before`, and `within_days` fields use the same added-time semantics as `recently_added`: `since` is inclusive, `before` is exclusive, and date-only/timezone-less values use Home Assistant's configured timezone. With no time window the action returns a bounded newest-first catch-up queue rather than imposing an arbitrary hidden date cutoff.
+You can then use `plex_results` later in the script or automation.
 
-Plex Extended asks PMS for unwatched candidates and, when enabled, in-progress candidates separately, then deduplicates and re-checks viewing state client-side. Season 0/specials are excluded by default. Results distinguish never-started from partially watched episodes, group them by stable show identity, return episodes in canonical season/episode order, and report independent show/episode-detail truncation. Candidate scans are capped at 1,000 episodes per Plex state query per TV library; `candidate_scan_truncated` is explicit if that safety bound is reached.
+You do **not** need to create Plex sensors containing enormous lists of media. Returning data only when an action is called is one of Plex Extended's main design goals.
 
+## Which action should I use?
 
-### `plex_extended.related_media`
+| What you want | Action |
+| --- | --- |
+| Find something by title in your local library | `plex_extended.search` |
+| Filter/discover local media by metadata | `plex_extended.query_library` |
+| Count or summarize matching media | `plex_extended.library_summary` |
+| See progress in one TV show | `plex_extended.watch_status` |
+| Find unwatched/new episodes across shows | `plex_extended.tv_catch_up` |
+| Find similar/related local media | `plex_extended.related_media` |
+| See recent additions | `plex_extended.recently_added` |
+| See viewing history | `plex_extended.recently_watched` |
+| Get Continue Watching / On Deck | `plex_extended.continue_watching` / `plex_extended.on_deck` |
+| Inspect one exact item | `plex_extended.media_details` |
+| See active streams/transcodes | `plex_extended.active_streams` |
+| Browse collections | `plex_extended.list_collections` / `plex_extended.collection_items` |
+| Browse playlists | `plex_extended.list_playlists` / `plex_extended.playlist_items` |
+| Create/change a regular playlist | `plex_extended.create_playlist`, `add_to_playlist`, `remove_from_playlist` |
+| Search titles outside your local server | `plex_extended.discover_search` |
+| View your plex.tv Watchlist | `plex_extended.watchlist` |
+| Add/remove an exact Watchlist item | `plex_extended.add_to_watchlist` / `remove_from_watchlist` |
+| Mark one exact local item watched/unwatched | `plex_extended.mark_watched` / `mark_unwatched` |
+| List Plex libraries/users | `plex_extended.list_libraries` / `list_users` |
+| Check connectivity | `plex_extended.test_connection` |
 
-Returns Plex's own related/recommendation hubs for one exact local movie or TV show. Plex's hub categories are preserved rather than flattened into a Plex Extended scoring algorithm, so the response can retain distinctions such as related titles or recommendations connected through people/metadata.
+See the **[complete action reference](docs/action-reference.md)** for fields, examples, filtering semantics, IDs, truncation behavior, and mutation safety rules.
+
+## Important concepts
+
+### Local Plex search vs Plex Discover
+
+These solve different problems:
+
+- `plex_extended.search` searches media on **your configured Plex Media Server**.
+- `plex_extended.discover_search` searches **Plex Discover**, so results can include titles you do not own locally.
+
+Use Discover when you need a plex.tv identity, especially before changing the Plex Watchlist.
+
+### Stable IDs vs titles
+
+Plex Extended deliberately becomes stricter when an operation could be ambiguous or change data.
+
+Read actions often let you start with a convenient title. Write actions generally require exact IDs returned by Plex Extended first.
+
+Common identifiers are:
+
+- local media `rating_key` — exact media item on your Plex server;
+- collection `rating_key` — exact collection;
+- `playlist_rating_key` — exact regular playlist;
+- `library_id` — stable Plex library section;
+- `user_id` — stable Plex system account;
+- Discover `guid` — exact plex.tv movie/show identity used for Watchlist writes.
+
+This prevents an automation or LLM from changing the wrong item because two things happen to share a name.
+
+### Response data
+
+Plex Extended is primarily an **action-based integration**, not a sensor integration.
+
+Read actions return structured data only when called. This keeps large library/search results out of Home Assistant state attributes and makes the same backend useful to:
+
+- Developer Tools;
+- scripts;
+- automations;
+- native Assist/LLM tools.
+
+### Multiple Plex servers
+
+You can configure more than one Plex server.
+
+When only one server is configured, Plex Extended can normally select it automatically. With multiple servers, Home Assistant actions expose a server selector; YAML calls can use `config_entry_id` to make the target explicit.
+
+Native Assist tool schemas likewise include a server selector when more than one eligible Plex Extended entry is available.
+
+## Plex user context
+
+Plex viewing state is user-specific. Plex Extended can therefore run viewing-state-aware queries as the intended Plex household user.
+
+Open:
+
+**Settings → Devices & services → Plex Extended → Configure**
+
+and choose a **Default Plex user**.
+
+If you leave the default unset, Plex Extended uses the Plex server/account context created during setup.
+
+User-aware capabilities include search metadata, structured watched-state filtering, TV progress, recent history, Continue Watching, On Deck, collections/playlists, media details and watched/unwatched writes.
+
+Most user-aware actions also accept optional `user` and `user_id` values for one-call overrides. Prefer the stable `user_id` returned by `plex_extended.list_users` when an automation must remain unambiguous.
 
 ```yaml
-action: plex_extended.related_media
+action: plex_extended.watch_status
 data:
-  rating_key: "1234"
-  hub_limit: 6
-  item_limit: 5
-  include_summary: false
-response_variable: plex_related
+  title: Resident Alien
+  user: Guest
+response_variable: guest_progress
 ```
 
-`rating_key` must be the exact positive numeric local ID returned by a Plex Extended read action such as `search` or `query_library`. Movies and TV shows are supported. Optional `library` / `library_id` fields assert the seed item's library rather than performing a fuzzy lookup.
+### Who can switch Plex users?
 
-The query runs in the selected/default Plex household-user context, so viewing-state metadata on returned local items follows the same user semantics as other Plex Extended library reads. Provider/online objects from Plex's related endpoint are excluded: a recommendation must expose both a local `rating_key` and `librarySectionID` to be returned.
+Plex user switching requires the Plex credentials used to configure Plex Extended to belong to the server owner/admin.
 
-Plex Extended uses the related items already included in Plex's hub response and deliberately does not auto-expand hubs that report `more`. Each hub reports `more_available_from_plex` and `results_truncated`, while the top-level response independently reports hub truncation. Items are deduplicated within a hub but may appear in multiple different hubs because that cross-hub repetition preserves Plex's explanation for why the title is related.
+If Plex Extended is connected to somebody else's shared server as a non-owner, that normal connection can still be used, but Plex does not permit Plex Extended to switch it into another household user's server context.
 
-### `plex_extended.recently_added`
+### Watchlist is different
 
-Returns recently added media with optional exact time windows and TV episode grouping.
+Plex Watchlist belongs to the authenticated **plex.tv account**, not a local Plex household-user context.
 
-```yaml
-action: plex_extended.recently_added
-data:
-  within_days: 7
-  group_tv_by: show
-  limit: 10
-response_variable: plex_recent
-```
+Therefore:
 
-Use either `within_days` or `since` / `before`. `since` is inclusive and `before` is exclusive. Date-only and timezone-less values use Home Assistant's configured timezone. `group_tv_by` can be `none`, `show`, or `season`; grouping prevents one newly imported TV season from consuming the full response with individual episodes.
+- `plex_extended.watchlist` uses the account that configured that Plex Extended entry;
+- `discover_search` + Watchlist mutations operate at that account level;
+- the **Default Plex user** does not change whose Watchlist is being read or modified.
 
-### `plex_extended.recently_watched`
+Regular playlists, by contrast, follow the selected/default Plex household-user context.
 
-Returns Plex play history sorted newest first, with user/library/media-type filters and the same `since`, `before`, and `within_days` controls.
+## Native Assist / LLM tools
 
-```yaml
-action: plex_extended.recently_watched
-data:
-  since: "2026-09-01"
-  before: "2026-09-08"
-  media_types:
-    - movie
-  limit: 20
-response_variable: plex_history
-```
+Home Assistant 2026.8+ can discover Plex Extended's native LLM tool platform. A compatible conversation agent using Home Assistant's built-in Assist LLM API can call Plex Extended directly instead of relying on prompt-only instructions or template sensors.
 
-History paging continues until the requested filtered result count is filled, the requested time window is exhausted, or Plex history is exhausted.
+Examples include:
 
-### `plex_extended.continue_watching`
+- “Do I have *Alien*?”
+- “How many unwatched horror movies do I have?”
+- “Where am I up to in *Resident Alien*?”
+- “What new episodes do I need to catch up on?”
+- “What do I have that is similar to *Alien*?”
+- “Who is using Plex right now?”
+- “Is anything transcoding?”
 
-Returns the personalized Plex Continue Watching hub for the configured default Plex user, or the configured server context if no default user exists. Optional `user`/`user_id` values override the default for one call.
+### Enable or disable Plex Extended tools per server
 
-### `plex_extended.on_deck`
+Go to:
 
-Returns personalized Plex On Deck items for the configured default Plex user, or the configured server context if no default user exists.
+**Settings → Devices & services → Plex Extended → Configure**
 
-### `plex_extended.media_details`
+The **Enable native Assist tools** option is on by default. Turning it off removes that Plex server from Plex Extended's native LLM tool set without disabling normal Home Assistant actions.
 
-Fetches a single Plex item by a `rating_key` returned by another Plex Extended query.
+### Assist writes are off by default
 
-```yaml
-action: plex_extended.media_details
-data:
-  rating_key: "1234"
-  include_technical: true
-response_variable: plex_item
-```
+Plex Extended has separate permissions for:
 
-Technical metadata can include container, bitrate, resolution, codecs, dimensions, frame rate, and audio channels. Local filesystem paths are deliberately not exposed.
+- **Allow Assist to change Plex watch state**;
+- **Allow Assist to change Plex Watchlist**;
+- **Allow Assist to change Plex playlists**.
 
+These are independent and default to off.
 
-### `plex_extended.active_streams`
+Manual Home Assistant actions are **not** controlled by those Assist-specific toggles.
 
-Returns current Plex playback sessions without controlling the player. Results can include the Plex user, media and progress, player/product/platform, local/remote/relay/security state, selected source quality, session bandwidth/location, and delivery details.
+When an Assist write family is enabled, Plex Extended still uses exact-ID contracts, post-write verification, bounded mutations, and model guidance that requires an explicit user request.
 
-```yaml
-action: plex_extended.active_streams
-data:
-  locality: remote
-  states:
-    - playing
-response_variable: plex_streams
-```
+## Mutation safety
 
-Delivery is classified as `direct_play`, `direct_stream`, `transcode`, or `unknown`. A Plex transcode-session wrapper whose media components are copied rather than transcoded is reported as `direct_stream`, not as a true transcode. Client IP/public addresses, device machine identifiers, Plex tokens, session IDs, and local media file paths are deliberately not returned.
+Plex Extended intentionally avoids broad or fuzzy mutation APIs.
 
-Filters are available for exact Plex username, media type, playback state, local/remote location, and result limit. This action is read-only; it does not pause, stop, or otherwise control playback.
+### Watched/unwatched
 
-### `plex_extended.mark_watched` / `plex_extended.mark_unwatched`
+`mark_watched` and `mark_unwatched` require an exact local media `rating_key`. Plex Extended re-reads the item and fails if Plex does not confirm the requested state.
 
-Explicitly change one local Plex item's viewing state for the selected/default Plex user. These are side-effecting actions and therefore require an exact local `rating_key`; they deliberately do not accept a title lookup.
+### Watchlist
 
-```yaml
-action: plex_extended.mark_watched
-data:
-  rating_key: "1234"
-response_variable: plex_update
-```
+Watchlist add/remove requires both the exact Discover `guid` and the corresponding title returned by Plex Extended. Plex Extended re-runs Discover and requires an **exact GUID match** before it changes anything.
 
-Plex Extended refetches the item after the write and returns an error if Plex does not confirm the requested state. The response includes the previous and current watched state plus the effective Plex user. For shows and seasons, Plex applies the state to child episodes as well; the response reports `scope: item_and_children` so that cascade is explicit.
+Adding an already-present item or removing an already-absent item is treated as an idempotent success.
 
-The manual Home Assistant actions are always available. Native Assist write tools are a separate opt-in controlled by **Settings → Devices & services → Plex Extended → Configure → Allow Assist to change Plex watch state**.
-### `plex_extended.list_collections`
+### Regular playlists
 
-Lists collections visible in the selected/default Plex user context and returns stable collection rating keys. Optional filters include library, collection media type, and partial title.
+Existing-playlist writes require an exact `playlist_rating_key` from `list_playlists`.
 
-```yaml
-action: plex_extended.list_collections
-data:
-  media_type: movie
-  title: Bond
-  limit: 20
-response_variable: plex_collections
-```
+Playlist operations are designed to be retry-safe:
 
-### `plex_extended.collection_items`
+- add skips items already present;
+- remove clears all occurrences of requested IDs and verifies progress;
+- create detects same-title collisions conservatively;
+- smart and radio playlists remain read-only;
+- Plex Extended re-reads state after actual writes before reporting success.
 
-Returns media inside one Plex collection. Prefer a stable collection `rating_key` returned by `list_collections`; an exact title can be used when it is unambiguous.
+## Detailed action reference
 
-```yaml
-action: plex_extended.collection_items
-data:
-  rating_key: "2468"
-  limit: 50
-response_variable: plex_collection
-```
+The README is intentionally focused on getting a new user from installation to a working setup without requiring them to read every backend detail first.
 
-Collection title ambiguity is never resolved by guessing; use `rating_key` or `library_id` when multiple collections share a title.
+The full field-by-field and behavioral reference is in:
 
-### `plex_extended.list_playlists`
+**[docs/action-reference.md](docs/action-reference.md)**
 
-Lists playlists visible to the selected/default Plex user. `playlist_type` can be `video`, `audio`, or `photo`.
+It covers all Plex Extended actions, including:
 
-```yaml
-action: plex_extended.list_playlists
-data:
-  playlist_type: video
-  limit: 20
-response_variable: plex_playlists
-```
+- advanced library filters and facets;
+- date-window semantics;
+- TV catch-up bounds/truncation;
+- related-media hub behavior;
+- active-stream fields;
+- collection/playlist identity rules;
+- playlist mutation idempotency;
+- Discover/Watchlist identity rules;
+- user and library selectors.
 
-### `plex_extended.playlist_items`
+Home Assistant also exposes field descriptions directly in **Developer Tools → Actions**.
 
-Returns items in one playlist using a stable playlist rating key or an unambiguous exact title.
+## Troubleshooting
 
-```yaml
-action: plex_extended.playlist_items
-data:
-  title: Christmas
-  limit: 50
-response_variable: plex_playlist
-```
+### Plex authorization succeeds but the browser tab stays open
 
+After Plex approval, Plex Extended asks the external browser tab/window to close and the original Home Assistant flow continues.
 
-### `plex_extended.create_playlist` / `plex_extended.add_to_playlist` / `plex_extended.remove_from_playlist`
+Browsers can block automatic closing. The fallback page provides a **Return to Home Assistant** button; using it is safe.
 
-These actions make controlled changes to **regular** Plex playlists for the selected/default Plex user. Smart and radio playlists remain read-only.
+### No Plex server is found during Connect with Plex
 
-Existing-playlist changes require the exact `playlist_rating_key` returned by `list_playlists`; title-only mutation is deliberately unsupported. Media targets are exact local `rating_key` values returned by Plex Extended read actions. A single action accepts up to 50 media keys.
+Check that the Plex account you authorized can access the intended Plex Media Server and that the server is reachable.
 
-`create_playlist` requires at least one media item because Plex regular playlists are created from concrete media. Audio, video and photo items cannot be mixed. If an exact-title playlist already exists, an identical item sequence is treated as an idempotent retry; different contents fail rather than silently creating another same-name playlist.
+If the plex.tv discovery route is unsuitable for your setup, use **Manual setup** with the server URL and Plex token.
 
-`add_to_playlist` skips requested items already present, so retries do not create duplicate entries. `remove_from_playlist` removes **all occurrences** of each requested media item and treats already-absent items as success. Every actual write is re-read and verified before Plex Extended reports success.
+### A household user cannot be selected or queried
 
-Manual Home Assistant playlist-write actions are always available. Native Assist playlist-write tools are separately opt-in under **Configure → Allow Assist to change Plex playlists** and default off.
+Switching into another Plex household user's server context requires an owner/admin Plex connection. Shared non-owner server connections cannot switch users.
 
-### `plex_extended.discover_search`
+### A query says a library is ambiguous or cannot be selected
 
-Searches Plex Discover rather than only the configured local library, so it can resolve movies/shows that are not on the server. Results carry the exact Plex Discover `guid` used by the safe Watchlist mutation actions.
+Plex Extended automatically chooses a library only when exactly one compatible library exists. If you have several compatible libraries, supply `library` or preferably stable `library_id`.
 
-```yaml
-action: plex_extended.discover_search
-data:
-  query: 28 Years Later
-  media_type: movie
-  limit: 10
-response_variable: plex_discover
-```
+### An action is ambiguous because multiple Plex servers are configured
 
-`match_local` is disabled by default because local matching can require a GUID lookup for every Discover result. Enable it when you specifically need to know whether each online title is already present on this server.
+Choose the server in Home Assistant's action UI or supply `config_entry_id` in YAML.
 
-### `plex_extended.watchlist`
+### Plex Extended tools do not appear in Assist
 
-Returns the configured Plex account's plex.tv Watchlist. By default Plex Extended also attempts to match each movie/show to the configured local server using Plex's stable GUID.
+Check all of the following:
 
-```yaml
-action: plex_extended.watchlist
-data:
-  media_type: movie
-  filter: released
-  sort_by: watchlisted_at
-  sort_order: desc
-  match_local: true
-  limit: 25
-response_variable: plex_watchlist
-```
+1. **Enable native Assist tools** is enabled for the Plex Extended server.
+2. Your conversation integration/agent supports Home Assistant's built-in Assist LLM API.
+3. The Plex Extended config entry is loaded successfully.
 
-Each result includes online Watchlist metadata plus `on_server` when local matching is enabled. If exactly one local item matches, the response also supplies its local `rating_key`, library name, and library ID. Multiple local matches are returned explicitly rather than silently choosing one.
+If read tools appear but mutation tools do not, enable only the relevant Assist write permission under **Configure**.
 
-Supported Watchlist filters are `all`, `available`, and `released`. Sorting supports Watchlist-added time, title, release date, or critic rating. Because this is a plex.tv account-level feature, the integration's Default Plex user does **not** apply.
+### Assist can read Plex but cannot change watched state / playlists / Watchlist
 
-### `plex_extended.add_to_watchlist` / `plex_extended.remove_from_watchlist`
+That is the default safety configuration. Each write family has a separate opt-in under **Configure**.
 
-Explicitly change the configured plex.tv account's Watchlist. Both actions require the exact Discover `guid` plus the corresponding title returned by `discover_search`/Watchlist data. The title is used only to re-fetch candidates; the mutation proceeds only when Plex returns the **exact GUID**, so a stale or wrong GUID never falls back to a title match.
+### Watchlist results appear to ignore the Default Plex user
 
-The actions are idempotent and verify Watchlist state after any write. They are account-level operations: the integration's Default Plex user does not apply.
+That is intentional. Plex Watchlist belongs to the authenticated plex.tv account, not the selected local household user.
 
-Manual Home Assistant actions are always available. Native Assist Watchlist-write tools are separately opt-in under **Configure → Allow Assist to change Plex Watchlist** and default off.
+### Plex says authentication has expired
 
-### `plex_extended.list_libraries`
+If Plex rejects the stored server token, Plex Extended starts Home Assistant's normal reauthentication flow so the server identity can be retained while credentials are refreshed.
 
-Returns available Plex library names, stable IDs, types, and UUIDs.
+## Diagnostics and privacy
 
-### `plex_extended.list_users`
+Home Assistant can download diagnostics from the Plex Extended config-entry menu.
 
-Returns Plex system-account IDs and names for exact per-user viewing-state queries and for choosing the integration's default Plex user.
+Diagnostics include useful support information such as Plex server version/platform, connection scheme, enabled capabilities, and library section IDs/types.
 
-### `plex_extended.test_connection`
+Plex tokens, tokenized URLs, server host/URL, client identifiers, server machine identifiers, server name, library names and library UUIDs are redacted or omitted.
 
-Tests the configured Plex connection and returns basic server identity information.
-
-## Native LLM tools
-
-Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/llm.py`. Plex Extended contributes these tools to the built-in **Assist** LLM API:
-
-- `plex_extended__search`
-- `plex_extended__discover_search`
-- `plex_extended__query_library`
-- `plex_extended__library_summary`
-- `plex_extended__watch_status`
-- `plex_extended__tv_catch_up`
-- `plex_extended__related_media`
-- `plex_extended__recently_added`
-- `plex_extended__recently_watched`
-- `plex_extended__continue_watching`
-- `plex_extended__on_deck`
-- `plex_extended__media_details`
-- `plex_extended__active_streams`
-- `plex_extended__mark_watched` *(only when Assist write access is enabled)*
-- `plex_extended__mark_unwatched` *(only when Assist write access is enabled)*
-- `plex_extended__list_collections`
-- `plex_extended__collection_items`
-- `plex_extended__list_playlists`
-- `plex_extended__playlist_items`
-- `plex_extended__create_playlist` *(only when Assist playlist writes are enabled)*
-- `plex_extended__add_to_playlist` *(only when Assist playlist writes are enabled)*
-- `plex_extended__remove_from_playlist` *(only when Assist playlist writes are enabled)*
-- `plex_extended__watchlist`
-- `plex_extended__add_to_watchlist` *(only when Assist Watchlist writes are enabled)*
-- `plex_extended__remove_from_watchlist` *(only when Assist Watchlist writes are enabled)*
-- `plex_extended__list_libraries`
-- `plex_extended__list_users`
-
-A compatible conversation integration can therefore answer questions such as:
-
-- "Do I have Alien on Plex?"
-- "Find 28 Years Later on Plex Discover and add it to my Watchlist."
-- "Find an unwatched horror movie from the 1980s around 90 to 120 minutes."
-- "How many unwatched horror movies do I have?"
-- "Which decades have the most movies in my library?"
-- "Where am I up to in Resident Alien?"
-- "What new TV episodes do I have to catch up on?"
-- "What do I have on Plex that is similar to Alien?"
-- "What was added to Plex in the last week?"
-- "Which TV shows got new episodes this week?"
-- "What did I watch between Monday and Friday?"
-- "What's in my James Bond collection?"
-- "What's in my Christmas playlist?"
-- "Create a Weekend Movies playlist with these three films."
-- "Add that movie to my Weekend Movies playlist."
-- "Which things on my Plex Watchlist are already on my server?"
-- "Give me my Continue Watching list."
-- "Who is using Plex right now?"
-- "Is anything currently transcoding?"
-- "Where is Guest up to in that show?"
-- "Mark that episode as watched."
-
-The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, single-show TV progress, cross-show TV catch-up, Plex-native related-media recommendations, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval or mutation, and understands that regular playlists use the selected/default household-user context while Watchlist is account-level.
-
-Watch-state, regular-playlist, and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins. When explicitly enabled, the model is instructed to act only on an explicit user request and to resolve exact Plex identifiers with read tools first rather than inventing them. Playlist add/remove additionally require the exact playlist `rating_key` from `list_playlists`. In multi-server setups, each write-tool family exposes only the server entries on which its own option is enabled.
-
-LLM search/list/query tools omit summaries by default to keep broad results token-efficient. LLM result limits are capped at 25; regular Home Assistant actions allow up to 50 and continue to include summaries by default for backwards compatibility.
-
-## Diagnostics
-
-Home Assistant can download diagnostics from the Plex Extended config-entry menu. Diagnostics include useful support information such as Plex server version/platform, connection scheme, enabled capabilities, and library section IDs/types.
-
-Plex tokens, server URL/host, Plex client identifier, server machine identifier, server name, library names, and library UUIDs are deliberately redacted or omitted.
+Normal Plex Extended action/tool results also intentionally avoid Plex tokens, tokenized URLs, local media filesystem paths, playback session IDs and client IP/public addresses.
 
 ## Authentication
 
 The normal setup flow uses Plex's website authorization process through `plexauth`:
 
 1. Home Assistant creates a Plex authorization request for Plex Extended.
-2. The browser is sent to Plex.
-3. The user signs in/approves on Plex's site.
-4. Plex Extended discovers the account's Plex Media Server resources.
-5. The integration connects to the selected server using that server resource's access token.
+2. Your browser is sent to Plex.
+3. You sign in/approve on Plex's site.
+4. Plex Extended discovers Plex Media Servers available to the account.
+5. The selected server is connected using the access token Plex provides for that resource.
 
-After authorization, the external browser window/tab is asked to close automatically and the original Home Assistant config flow continues. If the browser blocks automatic closing, the fallback page provides a Return to Home Assistant button.
+Plex Extended never receives or stores your Plex password.
 
-Plex Extended never receives or stores the user's Plex password. If Plex later rejects the configured token, Plex Extended starts a Home Assistant reauthentication flow.
+Plex Discover and account-Watchlist features continue to communicate with plex.tv when used. Local-library queries communicate with the configured Plex Media Server.
 
-## Design
+## Relationship to Home Assistant's built-in Plex integration
 
-Plex Extended keeps the Home Assistant action and native LLM layers as thin interfaces over shared backends:
+Plex Extended does **not** override, patch, or replace Home Assistant's `plex` integration.
 
-```text
-Plex Media Server / plex.tv
-          │
-          ▼
-PlexExtendedClient + user context + query/summary/progress/recent/list backends
-          │
-          ├── Home Assistant response-data actions
-          │
-          └── Home Assistant native LLM tools
-```
+| Home Assistant Plex | Plex Extended |
+| --- | --- |
+| Media-player entities and playback controls | Query/aggregate Plex library data |
+| Existing Plex media-source behavior | Structured response-data actions |
+| Player/server activity already exposed by core | Rich active-session/transcode query data |
+| Core Plex integration features | Per-user progress/history/discovery and safe selected mutations |
+| — | Native Assist/LLM query tools |
 
-This prevents action and LLM behavior from drifting apart. User-scoped server contexts are resolved in one shared layer, while account-scoped plex.tv Watchlist behavior is kept explicitly separate.
+Both can be configured against the same Plex account/server at the same time.
 
-## Relationship to Home Assistant's Plex integration
+## v0.1.0 scope
 
-Plex Extended does **not** override or monkey-patch Home Assistant's built-in `plex` integration.
+The initial release focuses on rich querying plus **narrowly scoped, verifiable mutations**.
 
-- **Home Assistant Plex:** media players, playback, server/client activity, and existing Plex media-source behavior.
-- **Plex Extended:** querying and aggregating the library, metadata, recent additions, collections/playlists/Watchlist, active playback sessions, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.
+Included writes are limited to:
 
-Both integrations can be configured against the same Plex account/server at the same time.
+- watched/unwatched state for exact local Plex items;
+- exact Plex Discover items in the configured account's Watchlist;
+- regular Plex playlist creation/add/remove using exact identities.
 
-## v1 scope
-
-Version `0.1.0` focuses on query functionality plus narrowly scoped, explicit watched/unwatched updates. It deliberately does not add playback control, broader destructive library operations, or Tautulli-specific analytics.
+Plex Extended deliberately does **not** provide playback control, broad destructive library operations, arbitrary raw Plex API calls, or Tautulli-specific analytics.
 
 ## Development and validation
 
-The repository validation workflow runs Python compilation, focused unit tests, Home Assistant `hassfest`, and HACS validation on pushes and pull requests.
+The repository validation workflow runs:
+
+- Python compilation;
+- the fast backend/unit test suite;
+- real Home Assistant integration-contract tests against the declared minimum Home Assistant release and current stable;
+- Home Assistant `hassfest`;
+- HACS validation.
+
+The real Home Assistant contract suite covers config-entry setup/unload, config and reauthentication flows, options, service registration/dispatch, multi-server behavior, mutation response contracts, and native LLM platform discovery.
