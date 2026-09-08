@@ -318,6 +318,19 @@ data:
 response_variable: plex_playlist
 ```
 
+
+### `plex_extended.create_playlist` / `plex_extended.add_to_playlist` / `plex_extended.remove_from_playlist`
+
+These actions make controlled changes to **regular** Plex playlists for the selected/default Plex user. Smart and radio playlists remain read-only.
+
+Existing-playlist changes require the exact `playlist_rating_key` returned by `list_playlists`; title-only mutation is deliberately unsupported. Media targets are exact local `rating_key` values returned by Plex Extended read actions. A single action accepts up to 50 media keys.
+
+`create_playlist` requires at least one media item because Plex regular playlists are created from concrete media. Audio, video and photo items cannot be mixed. If an exact-title playlist already exists, an identical item sequence is treated as an idempotent retry; different contents fail rather than silently creating another same-name playlist.
+
+`add_to_playlist` skips requested items already present, so retries do not create duplicate entries. `remove_from_playlist` removes **all occurrences** of each requested media item and treats already-absent items as success. Every actual write is re-read and verified before Plex Extended reports success.
+
+Manual Home Assistant playlist-write actions are always available. Native Assist playlist-write tools are separately opt-in under **Configure → Allow Assist to change Plex playlists** and default off.
+
 ### `plex_extended.discover_search`
 
 Searches Plex Discover rather than only the configured local library, so it can resolve movies/shows that are not on the server. Results carry the exact Plex Discover `guid` used by the safe Watchlist mutation actions.
@@ -394,6 +407,9 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 - `plex_extended__collection_items`
 - `plex_extended__list_playlists`
 - `plex_extended__playlist_items`
+- `plex_extended__create_playlist` *(only when Assist playlist writes are enabled)*
+- `plex_extended__add_to_playlist` *(only when Assist playlist writes are enabled)*
+- `plex_extended__remove_from_playlist` *(only when Assist playlist writes are enabled)*
 - `plex_extended__watchlist`
 - `plex_extended__add_to_watchlist` *(only when Assist Watchlist writes are enabled)*
 - `plex_extended__remove_from_watchlist` *(only when Assist Watchlist writes are enabled)*
@@ -413,6 +429,8 @@ A compatible conversation integration can therefore answer questions such as:
 - "What did I watch between Monday and Friday?"
 - "What's in my James Bond collection?"
 - "What's in my Christmas playlist?"
+- "Create a Weekend Movies playlist with these three films."
+- "Add that movie to my Weekend Movies playlist."
 - "Which things on my Plex Watchlist are already on my server?"
 - "Give me my Continue Watching list."
 - "Who is using Plex right now?"
@@ -420,9 +438,9 @@ A compatible conversation integration can therefore answer questions such as:
 - "Where is Guest up to in that show?"
 - "Mark that episode as watched."
 
-The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval and understands that Watchlist is not affected by the configured household-user default.
+The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval or mutation, and understands that regular playlists use the selected/default household-user context while Watchlist is account-level.
 
-Watch-state mutation tools and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins. When explicitly enabled in the integration options, the model is instructed to use them only for an explicit user request, resolve an exact local `rating_key` with a read tool first, and never invent an identifier. In multi-server setups, write tools expose only the server entries on which this option is enabled.
+Watch-state, regular-playlist, and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins. When explicitly enabled, the model is instructed to act only on an explicit user request and to resolve exact Plex identifiers with read tools first rather than inventing them. Playlist add/remove additionally require the exact playlist `rating_key` from `list_playlists`. In multi-server setups, each write-tool family exposes only the server entries on which its own option is enabled.
 
 LLM search/list/query tools omit summaries by default to keep broad results token-efficient. LLM result limits are capped at 25; regular Home Assistant actions allow up to 50 and continue to include summaries by default for backwards compatibility.
 

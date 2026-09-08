@@ -1387,6 +1387,103 @@ playlist_items:
         boolean:
 
 
+create_playlist:
+  name: Create playlist
+  description: Create a regular Plex playlist for the selected/default Plex user from exact local media rating keys. Smart playlists are not created by this action.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    title:
+      name: Playlist title
+      description: New playlist title. If an exact-title playlist already exists with different contents, the action fails instead of creating a duplicate.
+      required: true
+      selector:
+        text:
+    rating_keys:
+      name: Media rating keys
+      description: Exact local media rating keys returned by Plex Extended. YAML can supply a list of up to 50 values; audio, video and photo media cannot be mixed.
+      required: true
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for this playlist.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user for this playlist.
+      selector:
+        text:
+
+add_to_playlist:
+  name: Add to playlist
+  description: Idempotently add exact local media items to one regular Plex playlist. Existing items are not duplicated.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    playlist_rating_key:
+      name: Playlist rating key
+      description: Exact stable playlist rating key returned by List playlists. Title-only mutation is deliberately unsupported.
+      required: true
+      selector:
+        text:
+    rating_keys:
+      name: Media rating keys
+      description: Exact local media rating keys to add. YAML can supply a list of up to 50 values.
+      required: true
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user.
+      selector:
+        text:
+
+remove_from_playlist:
+  name: Remove from playlist
+  description: Idempotently remove exact local media from one regular Plex playlist. All occurrences of each requested item are removed; already-absent items are harmless.
+  fields:
+    config_entry_id:
+      name: Plex server
+      selector:
+        config_entry:
+          integration: plex_extended
+    playlist_rating_key:
+      name: Playlist rating key
+      description: Exact stable playlist rating key returned by List playlists. Title-only mutation is deliberately unsupported.
+      required: true
+      selector:
+        text:
+    rating_keys:
+      name: Media rating keys
+      description: Exact local media rating keys to remove. YAML can supply a list of up to 50 values.
+      required: true
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID. Overrides the configured default Plex user.
+      selector:
+        text:
+
+
 discover_search:
   name: Search Plex Discover
   description: Search Plex Discover for movies or TV shows, including titles not present on the local Plex server. Returns exact Discover GUIDs for safe Watchlist follow-up actions.
