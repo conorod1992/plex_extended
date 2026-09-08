@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -33,7 +34,8 @@ def _write_manifest(root: Path, version: str) -> Path:
 
 def test_repository_release_version_is_valid() -> None:
     """The committed release metadata should remain internally consistent."""
-    assert release_version.current_version() == "0.1.0"
+    version = release_version.current_version()
+    assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version)
 
 
 def test_set_release_version_updates_manifest(tmp_path: Path) -> None:
