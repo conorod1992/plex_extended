@@ -216,7 +216,7 @@ def test_richer_library_filters_split_native_and_technical_criteria() -> None:
     assert post_filters["media__videoCodec__in"] == ["hevc", "h264"]
     assert post_filters["media__audioCodec__in"] == ["truehd"]
     assert post_filters["media__container__in"] == ["mkv"]
-    assert post_filters["media__audioChannels__in"] == [6, 8]
+    assert post_filters["media__audioChannels__in"] == ["6", "8"]
 
 
 def test_false_duplicate_filter_uses_plex_boolean_false_operator() -> None:

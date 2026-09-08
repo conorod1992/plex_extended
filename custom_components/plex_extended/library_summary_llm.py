@@ -39,7 +39,8 @@ class LibrarySummaryPlexTool(QueryLibraryPlexTool):
         "criteria, optionally with compact facet breakdowns or total duration. Use this "
         "instead of query_library when the user asks how many items match, how the library "
         "is distributed by genre/year/decade/resolution/watch state/content rating/studio/"
-        "collection, or for the total runtime of matching media. Viewing-state criteria use "
+        "collection/label/country/language/codec/container/channel count, or for the total "
+        "runtime of matching media. Viewing-state criteria use "
         "the configured default Plex user unless user or user_id explicitly overrides it."
     )
 

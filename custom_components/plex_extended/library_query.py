@@ -219,7 +219,9 @@ def _build_filters(criteria: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 
     channels = criteria.get("audio_channels")
     if channels is not None:
-        channel_values = [int(value) for value in _values(channels)]
+        # PlexAPI XML attributes are strings for list-membership operators.
+        # Keep the public schema numeric, but compare against the serialized values.
+        channel_values = _values(channels)
         if channel_values:
             post_filters["media__audioChannels__in"] = channel_values
 
