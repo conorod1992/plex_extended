@@ -6,6 +6,17 @@ ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
 
 
+def _documentation() -> str:
+    return "\n".join(
+        path.read_text()
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "action-reference.md",
+            ROOT / "docs" / "assist-reference.md",
+        )
+    )
+
+
 def test_tv_catch_up_action_is_registered_as_response_only() -> None:
     const = (COMPONENT / "const.py").read_text()
     adapter = (COMPONENT / "tv_catch_up_service.py").read_text()
@@ -55,13 +66,13 @@ def test_native_assist_exposes_read_only_tv_catch_up_tool() -> None:
 def test_docs_metadata_and_diagnostics_advertise_tv_catch_up() -> None:
     yaml = (COMPONENT / "services.yaml").read_text()
     diagnostics = (COMPONENT / "diagnostics.py").read_text()
-    readme = (ROOT / "README.md").read_text()
+    docs = _documentation()
 
     assert "\ntv_catch_up:\n" in yaml
     assert '"tv_catch_up"' in diagnostics
-    assert "plex_extended.tv_catch_up" in readme
-    assert "plex_extended__tv_catch_up" in readme
-    assert "candidate_scan_truncated" in readme
+    assert "plex_extended.tv_catch_up" in docs
+    assert "plex_extended__tv_catch_up" in docs
+    assert "candidate_scan_truncated" in docs
 
 
 def test_temporary_tv_catch_up_helpers_are_not_retained() -> None:
