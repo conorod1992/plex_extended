@@ -32,7 +32,7 @@ DISCOVER_SEARCH_SCHEMA = vol.Schema(
         vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
         vol.Optional("media_type"): vol.In(("movie", "show")),
         vol.Optional("limit", default=DEFAULT_LIMIT): _LIMIT,
-        vol.Optional("match_local", default=True): cv.boolean,
+        vol.Optional("match_local", default=False): cv.boolean,
         vol.Optional("include_summary", default=True): cv.boolean,
     }
 )
