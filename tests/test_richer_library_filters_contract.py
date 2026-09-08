@@ -44,6 +44,30 @@ def test_summary_facets_and_developer_tools_include_new_dimensions() -> None:
         assert f"`{facet}`" in readme
 
 
+def test_native_and_technical_filters_remain_separate() -> None:
+    backend = (COMPONENT / "library_query.py").read_text()
+
+    for native_key in (
+        'filters[plex_key] = values',
+        '("audio_languages", "audioLanguage")',
+        '("subtitle_languages", "subtitleLanguage")',
+        '("labels", "label")',
+        '("countries", "country")',
+        '("duplicates", "duplicate")',
+        '("unmatched", "unmatched")',
+    ):
+        assert native_key in backend
+
+    for technical_key in (
+        'post_filters[f"media__{plex_attribute}__in"]',
+        'post_filters["media__audioChannels__in"]',
+    ):
+        assert technical_key in backend
+
+    # PlexAPI's XML list-membership operator sees serialized attribute values.
+    assert "channel_values = _values(channels)" in backend
+
+
 def test_no_arbitrary_raw_plex_filter_escape_hatch_was_added() -> None:
     services = (COMPONENT / "services.py").read_text()
     llm = (COMPONENT / "llm_tools.py").read_text()
@@ -52,5 +76,10 @@ def test_no_arbitrary_raw_plex_filter_escape_hatch_was_added() -> None:
 
 
 def test_temporary_pr14_helpers_are_not_retained() -> None:
-    assert not (ROOT / ".github/workflows/pr14-wire.yml").exists()
-    assert not (ROOT / ".github/scripts/pr14_patch.py").exists()
+    for path in (
+        ROOT / ".github/workflows/pr14-wire.yml",
+        ROOT / ".github/scripts/pr14_patch.py",
+        ROOT / ".github/workflows/pr14-fix.yml",
+        ROOT / ".github/scripts/pr14_fix.py",
+    ):
+        assert not path.exists()
