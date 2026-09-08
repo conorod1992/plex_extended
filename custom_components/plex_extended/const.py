@@ -25,12 +25,24 @@ X_PLEX_VERSION: Final = "0.1.0"
 
 DEFAULT_LIMIT: Final = 10
 MAX_LIMIT: Final = 50
+DEFAULT_FACET_LIMIT: Final = 20
+MAX_FACET_LIMIT: Final = 50
 HISTORY_PAGE_SIZE: Final = 100
 DEFAULT_SEARCH_TYPES: Final = ["movie", "show"]
 DEFAULT_LLM_INCLUDE_SUMMARY: Final = False
 RECENT_TV_GROUPINGS: Final = ("none", "show", "season")
 ACTIVE_STREAM_STATES: Final = ("playing", "paused", "buffering")
 ACTIVE_STREAM_LOCALITIES: Final = ("any", "local", "remote")
+LIBRARY_SUMMARY_FACETS: Final = (
+    "genre",
+    "year",
+    "decade",
+    "resolution",
+    "watched_state",
+    "content_rating",
+    "studio",
+    "collection",
+)
 SEARCH_TYPES: Final = (
     "movie",
     "show",
@@ -77,6 +89,7 @@ WATCHLIST_SORT_FIELDS: Final = (
 
 SERVICE_SEARCH: Final = "search"
 SERVICE_QUERY_LIBRARY: Final = "query_library"
+SERVICE_LIBRARY_SUMMARY: Final = "library_summary"
 SERVICE_WATCH_STATUS: Final = "watch_status"
 SERVICE_RECENTLY_ADDED: Final = "recently_added"
 SERVICE_RECENTLY_WATCHED: Final = "recently_watched"
