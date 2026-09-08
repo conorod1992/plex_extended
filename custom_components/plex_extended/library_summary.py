@@ -12,7 +12,7 @@ from .library_query import _build_filters, _resolve_query_section
 from .user_context import PlexUserContext, resolve_user_context
 
 _DETAIL_BATCH_SIZE = 100
-_HYDRATED_FACETS = {"genre", "resolution", "collection"}
+_HYDRATED_FACETS = {"genre", "resolution", "collection", "watched_state"}
 
 
 def _criterion_values(value: Any) -> list[str]:
@@ -100,21 +100,17 @@ def _rating_key(item: Any) -> str | None:
 
 
 def _hydrate_items(server: Any, items: list[Any]) -> list[Any]:
-    """Fetch full item metadata in batches for tag/technical facets.
+    """Fetch full item metadata in batches for facets that need complete rows.
 
-    Library search rows are partial Plex objects. Accessing a missing `genres` or
-    `media` property one item at a time can cause an N+1 reload storm, so exact facets
-    that need child metadata are hydrated through Plex's multi-rating-key endpoint in
-    bounded batches.
+    Library search rows are partial Plex objects. Accessing a missing tag, media, or
+    viewing-state property one item at a time can cause an N+1 reload storm, so facets
+    that need complete metadata are hydrated through Plex's multi-rating-key endpoint
+    in bounded batches.
     """
     numeric_keys: list[int] = []
-    original_by_key: dict[str, Any] = {}
     for item in items:
         key = _rating_key(item)
-        if key is None:
-            continue
-        original_by_key[key] = item
-        if key.isdigit():
+        if key is not None and key.isdigit():
             numeric_keys.append(int(key))
 
     hydrated_by_key: dict[str, Any] = {}
@@ -154,19 +150,8 @@ def _resolution_values(item: Any) -> list[str]:
 
 
 def _watched_state(item: Any) -> str | None:
-    """Classify one Plex item into watched/in-progress/unwatched when meaningful."""
+    """Classify a hydrated item without triggering another PlexAPI reload."""
     data = object.__getattribute__(item, "__dict__")
-
-    try:
-        played = getattr(item, "isPlayed")
-    except Exception:
-        played = None
-    if played is True:
-        return "watched"
-
-    view_count = data.get("viewCount")
-    if view_count:
-        return "watched"
 
     viewed_leaf_count = data.get("viewedLeafCount")
     leaf_count = data.get("leafCount")
@@ -183,11 +168,18 @@ def _watched_state(item: Any) -> str | None:
                 return "in_progress"
             return "unwatched"
 
+    view_count = data.get("viewCount")
+    if view_count:
+        return "watched"
+
     view_offset = data.get("viewOffset")
     if view_offset:
         return "in_progress"
 
-    if view_count is not None or view_offset is not None or played is False:
+    if any(
+        key in data
+        for key in ("viewCount", "viewOffset", "viewedLeafCount", "leafCount")
+    ):
         return "unwatched"
     return None
 
