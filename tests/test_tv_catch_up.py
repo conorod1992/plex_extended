@@ -164,7 +164,7 @@ def test_groups_remaining_episodes_by_show_and_preserves_canonical_order() -> No
     assert resident["next_episode"]["season_episode"] == "S01E03"
 
 
-def test_server_query_uses_unwatched_and_shared_added_window_filters() -> None:
+def test_server_query_uses_unwatched_in_progress_and_shared_window_filters() -> None:
     zone = ZoneInfo("UTC")
     section = FakeSection("2", "TV Shows")
     section.items = [
@@ -176,10 +176,14 @@ def test_server_query_uses_unwatched_and_shared_added_window_filters() -> None:
         {"since": "2026-09-01", "before": "2026-09-08"},
     )
 
-    filters = section.search_calls[0]["filters"]
-    assert filters["unwatched"] is True
-    assert "addedAt>>" in filters
-    assert "addedAt<<" in filters
+    assert len(section.search_calls) == 2
+    unwatched_filters = section.search_calls[0]["filters"]
+    progress_filters = section.search_calls[1]["filters"]
+    assert unwatched_filters["unwatched"] is True
+    assert progress_filters["inProgress"] is True
+    for filters in (unwatched_filters, progress_filters):
+        assert "addedAt>>" in filters
+        assert "addedAt<<" in filters
     assert section.search_calls[0]["sort"] == "addedAt:desc"
     assert section.search_calls[0]["libtype"] == "episode"
     assert result["window"]["since"].startswith("2026-09-01T00:00:00")
@@ -224,6 +228,7 @@ def test_in_progress_and_specials_are_explicitly_controllable() -> None:
         client,
         {"include_specials": True, "include_in_progress": False},
     )
+    assert len(section.search_calls) == 3  # two default scans, then unwatched-only.
     assert strict["remaining_episode_count"] == 2
     assert strict["in_progress_episode_count"] == 0
     assert strict["results"][0]["seasons"] == [0, 1]
@@ -278,5 +283,5 @@ def test_candidate_scan_truncation_is_explicit() -> None:
     result = _tv_catch_up(_client(FakeServer([section])), {"episode_limit": 1})
 
     assert result["candidate_scan_truncated"] is True
-    assert result["candidate_scan_limit_per_library"] == _CANDIDATE_SCAN_LIMIT
+    assert result["candidate_scan_limit_per_query"] == _CANDIDATE_SCAN_LIMIT
     assert result["remaining_episode_count"] == _CANDIDATE_SCAN_LIMIT
