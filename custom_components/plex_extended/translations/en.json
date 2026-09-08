@@ -60,7 +60,7 @@
         },
         "data_description": {
           "enable_llm_tools": "When disabled, this Plex server is omitted from all native Plex Extended Assist tools. Manual Home Assistant actions remain available. Existing installations default to enabled.",
-          "allow_llm_mutations": "When enabled, Plex Extended exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of this setting."
+          "allow_llm_mutations": "When native Assist tools are enabled, this additionally exposes mark-watched and mark-unwatched tools to Assist. Manual Home Assistant actions remain available regardless of either setting."
         }
       }
     },
