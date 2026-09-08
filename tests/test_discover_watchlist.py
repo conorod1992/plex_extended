@@ -28,18 +28,6 @@ class PlexExtendedClient:
     pass
 
 
-client_module = ModuleType("custom_components.plex_extended.client")
-client_module.PlexExtendedClient = PlexExtendedClient
-client_module.PlexExtendedError = PlexExtendedError
-sys.modules[client_module.__name__] = client_module
-
-const_module = ModuleType("custom_components.plex_extended.const")
-const_module.DEFAULT_LIMIT = 10
-sys.modules[const_module.__name__] = const_module
-
-library_lists = ModuleType("custom_components.plex_extended.library_lists")
-
-
 def serialize_online(client, server, item, *, include_summary, match_local):
     result = {
         "guid": item.guid,
@@ -54,17 +42,41 @@ def serialize_online(client, server, item, *, include_summary, match_local):
     return result
 
 
+_STUB_NAMES = (
+    "custom_components.plex_extended.client",
+    "custom_components.plex_extended.const",
+    "custom_components.plex_extended.library_lists",
+)
+_saved_modules = {name: sys.modules.get(name) for name in _STUB_NAMES}
+
+client_module = ModuleType(_STUB_NAMES[0])
+client_module.PlexExtendedClient = PlexExtendedClient
+client_module.PlexExtendedError = PlexExtendedError
+sys.modules[client_module.__name__] = client_module
+
+const_module = ModuleType(_STUB_NAMES[1])
+const_module.DEFAULT_LIMIT = 10
+sys.modules[const_module.__name__] = const_module
+
+library_lists = ModuleType(_STUB_NAMES[2])
 library_lists._serialize_watchlist_item = serialize_online
 sys.modules[library_lists.__name__] = library_lists
 
-spec = importlib.util.spec_from_file_location(
-    "custom_components.plex_extended.discover_watchlist",
-    COMPONENT / "discover_watchlist.py",
-)
-assert spec and spec.loader
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
+try:
+    spec = importlib.util.spec_from_file_location(
+        "custom_components.plex_extended.discover_watchlist",
+        COMPONENT / "discover_watchlist.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+finally:
+    for name, previous in _saved_modules.items():
+        if previous is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = previous
 
 _discover_search = module._discover_search
 _add_to_watchlist = module._add_to_watchlist
