@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from homeassistant.components.llm import async_get_tools
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.llm import LLM_API_ASSIST, LLMContext
@@ -21,8 +22,10 @@ from custom_components.plex_extended.const import (
 
 
 async def _setup_entry(hass: HomeAssistant, entry) -> None:
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    if entry.state is ConfigEntryState.NOT_LOADED:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
 
 
 async def test_services_require_server_selection_with_multiple_entries(
