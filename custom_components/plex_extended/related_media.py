@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from plexapi.exceptions import NotFound, Unauthorized
+from requests.exceptions import RequestException
+
 from .client import PlexExtendedClient, PlexExtendedError
 from .user_context import resolve_user_context
 
@@ -27,8 +30,17 @@ def _resolve_source(
     rating_key = _positive_rating_key(criteria.get("rating_key"))
     try:
         source = server.fetchItem(rating_key)
-    except Exception as err:
+    except (Unauthorized, RequestException):
+        # Let the client's executor wrapper translate transport/authentication
+        # failures consistently and start Home Assistant reauthentication when
+        # Plex rejects the configured token.
+        raise
+    except NotFound as err:
         raise PlexExtendedError(f"Plex media not found for rating key {rating_key}") from err
+    except Exception as err:
+        raise PlexExtendedError(
+            f"Unable to load Plex media for rating key {rating_key}: {err}"
+        ) from err
 
     media_type = str(getattr(source, "type", ""))
     if media_type not in _SUPPORTED_SOURCE_TYPES:
@@ -107,6 +119,10 @@ def _related_media(
 
     try:
         plex_hubs = list(source.hubs())
+    except (Unauthorized, RequestException):
+        # Authentication and connection failures must remain visible to
+        # PlexExtendedClient._async_run(), which owns their HA-facing behavior.
+        raise
     except Exception as err:
         raise PlexExtendedError(
             f"Unable to load related media for '{getattr(source, 'title', 'Plex item')}'"
