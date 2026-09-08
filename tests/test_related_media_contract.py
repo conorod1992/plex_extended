@@ -6,6 +6,17 @@ ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
 
 
+def _documentation() -> str:
+    return "\n".join(
+        path.read_text()
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "action-reference.md",
+            ROOT / "docs" / "assist-reference.md",
+        )
+    )
+
+
 def test_related_media_action_is_registered_response_only() -> None:
     const = (COMPONENT / "const.py").read_text()
     adapter = (COMPONENT / "related_media_service.py").read_text()
@@ -43,14 +54,14 @@ def test_native_assist_exposes_read_only_related_media_tool() -> None:
 def test_docs_metadata_and_diagnostics_advertise_related_media() -> None:
     yaml = (COMPONENT / "services.yaml").read_text()
     diagnostics = (COMPONENT / "diagnostics.py").read_text()
-    readme = (ROOT / "README.md").read_text()
+    docs = _documentation()
 
     assert "\nrelated_media:\n" in yaml
     assert '"related_media"' in diagnostics
-    assert "plex_extended.related_media" in readme
-    assert "plex_extended__related_media" in readme
-    assert "more_available_from_plex" in readme
-    assert "Provider/online objects" in readme
+    assert "plex_extended.related_media" in docs
+    assert "plex_extended__related_media" in docs
+    assert "more_available_from_plex" in docs
+    assert "Provider/online objects" in docs
 
 
 def test_related_backend_stays_local_and_plex_native() -> None:
