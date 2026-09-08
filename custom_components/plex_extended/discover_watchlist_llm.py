@@ -38,7 +38,7 @@ class DiscoverSearchPlexTool(PlexTool):
                 vol.Required("query"): vol.All(cv.string, vol.Length(min=1)),
                 vol.Optional("media_type"): vol.In(("movie", "show")),
                 vol.Optional("limit", default=10): LLM_LIMIT,
-                vol.Optional("match_local", default=True): cv.boolean,
+                vol.Optional("match_local", default=False): cv.boolean,
                 vol.Optional("include_summary", default=False): cv.boolean,
             }
         )

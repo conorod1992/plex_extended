@@ -1272,6 +1272,49 @@ playlist_items:
       selector:
         boolean:
 
+
+discover_search:
+  name: Search Plex Discover
+  description: Search Plex Discover for movies or TV shows, including titles not present on the local Plex server. Returns exact Discover GUIDs for safe Watchlist follow-up actions.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended connection whose configured plex.tv account is used.
+      selector:
+        config_entry:
+          integration: plex_extended
+    query:
+      name: Query
+      required: true
+      selector:
+        text:
+    media_type:
+      name: Media type
+      selector:
+        select:
+          options:
+            - movie
+            - show
+    limit:
+      name: Limit
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    match_local:
+      name: Match to local library
+      description: Optionally check each Discover result against the configured local server using its Plex GUID. Disabled by default to avoid one local lookup per result.
+      default: false
+      selector:
+        boolean:
+    include_summary:
+      name: Include summaries
+      default: true
+      selector:
+        boolean:
+
 watchlist:
   name: Plex Watchlist
   description: Return the configured Plex account's plex.tv Watchlist and optionally match entries to media on this Plex server. The integration's default household Plex user does not apply to this account-level list.
@@ -1335,6 +1378,69 @@ watchlist:
       default: true
       selector:
         boolean:
+
+
+add_to_watchlist:
+  name: Add to Plex Watchlist
+  description: Add one exact Plex Discover movie/show to the configured plex.tv account's Watchlist. Requires the GUID and title returned by Search Plex Discover; the GUID is the authoritative identity.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended connection whose configured plex.tv account is changed.
+      selector:
+        config_entry:
+          integration: plex_extended
+    guid:
+      name: Discover GUID
+      description: Exact plex://movie/... or plex://show/... GUID returned by Search Plex Discover.
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      description: Title returned with the Discover GUID. Used only to re-fetch candidates; the write is allowed only when the GUID matches exactly.
+      required: true
+      selector:
+        text:
+    media_type:
+      name: Media type
+      description: Optional movie/show assertion. If supplied, it must match the Discover GUID.
+      selector:
+        select:
+          options:
+            - movie
+            - show
+
+remove_from_watchlist:
+  name: Remove from Plex Watchlist
+  description: Remove one exact Plex Discover movie/show from the configured plex.tv account's Watchlist. Requires an exact Discover GUID/title pair and verifies the result after the write.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended connection whose configured plex.tv account is changed.
+      selector:
+        config_entry:
+          integration: plex_extended
+    guid:
+      name: Discover GUID
+      description: Exact plex://movie/... or plex://show/... GUID returned by Search Plex Discover.
+      required: true
+      selector:
+        text:
+    title:
+      name: Title
+      description: Title returned with the Discover GUID. Used only to re-fetch candidates; the write is allowed only when the GUID matches exactly.
+      required: true
+      selector:
+        text:
+    media_type:
+      name: Media type
+      description: Optional movie/show assertion. If supplied, it must match the Discover GUID.
+      selector:
+        select:
+          options:
+            - movie
+            - show
 
 list_libraries:
   name: List libraries

@@ -2,7 +2,7 @@
 
 Plex Extended is a Home Assistant custom integration that exposes Plex as a queryable media library rather than only as a media player.
 
-It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, structured library discovery, aggregate library summaries, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, active playback sessions, metadata, libraries, and users.
+It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, Plex Discover search, structured library discovery, aggregate library summaries, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, active playback sessions, metadata, libraries, and users.
 
 ## Highlights
 
@@ -18,7 +18,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Exposes current Plex playback sessions, including player/progress and direct-play/direct-stream/transcode details.
 - Supports bounded recent-media queries and optional TV show/season grouping for large imports.
 - Exposes Plex collections and playlists, including their items.
-- Exposes the configured Plex account's plex.tv Watchlist and can match Watchlist entries to local server media by Plex GUID.
+- Exposes the configured Plex account's plex.tv Watchlist, Plex Discover search, and safe exact-GUID Watchlist add/remove actions.
 - Supports a configurable **default Plex user** for personalized viewing state, with per-query overrides.
 - Supports multiple Plex servers.
 - Supports stable Plex library/user/collection/playlist rating keys as well as convenient names.
@@ -316,6 +316,21 @@ data:
 response_variable: plex_playlist
 ```
 
+### `plex_extended.discover_search`
+
+Searches Plex Discover rather than only the configured local library, so it can resolve movies/shows that are not on the server. Results carry the exact Plex Discover `guid` used by the safe Watchlist mutation actions.
+
+```yaml
+action: plex_extended.discover_search
+data:
+  query: 28 Years Later
+  media_type: movie
+  limit: 10
+response_variable: plex_discover
+```
+
+`match_local` is disabled by default because local matching can require a GUID lookup for every Discover result. Enable it when you specifically need to know whether each online title is already present on this server.
+
 ### `plex_extended.watchlist`
 
 Returns the configured Plex account's plex.tv Watchlist. By default Plex Extended also attempts to match each movie/show to the configured local server using Plex's stable GUID.
@@ -336,6 +351,14 @@ Each result includes online Watchlist metadata plus `on_server` when local match
 
 Supported Watchlist filters are `all`, `available`, and `released`. Sorting supports Watchlist-added time, title, release date, or critic rating. Because this is a plex.tv account-level feature, the integration's Default Plex user does **not** apply.
 
+### `plex_extended.add_to_watchlist` / `plex_extended.remove_from_watchlist`
+
+Explicitly change the configured plex.tv account's Watchlist. Both actions require the exact Discover `guid` plus the corresponding title returned by `discover_search`/Watchlist data. The title is used only to re-fetch candidates; the mutation proceeds only when Plex returns the **exact GUID**, so a stale or wrong GUID never falls back to a title match.
+
+The actions are idempotent and verify Watchlist state after any write. They are account-level operations: the integration's Default Plex user does not apply.
+
+Manual Home Assistant actions are always available. Native Assist Watchlist-write tools are separately opt-in under **Configure → Allow Assist to change Plex Watchlist** and default off.
+
 ### `plex_extended.list_libraries`
 
 Returns available Plex library names, stable IDs, types, and UUIDs.
@@ -353,6 +376,7 @@ Tests the configured Plex connection and returns basic server identity informati
 Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/llm.py`. Plex Extended contributes these tools to the built-in **Assist** LLM API:
 
 - `plex_extended__search`
+- `plex_extended__discover_search`
 - `plex_extended__query_library`
 - `plex_extended__library_summary`
 - `plex_extended__watch_status`
@@ -369,12 +393,15 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 - `plex_extended__list_playlists`
 - `plex_extended__playlist_items`
 - `plex_extended__watchlist`
+- `plex_extended__add_to_watchlist` *(only when Assist Watchlist writes are enabled)*
+- `plex_extended__remove_from_watchlist` *(only when Assist Watchlist writes are enabled)*
 - `plex_extended__list_libraries`
 - `plex_extended__list_users`
 
 A compatible conversation integration can therefore answer questions such as:
 
 - "Do I have Alien on Plex?"
+- "Find 28 Years Later on Plex Discover and add it to my Watchlist."
 - "Find an unwatched horror movie from the 1980s around 90 to 120 minutes."
 - "How many unwatched horror movies do I have?"
 - "Which decades have the most movies in my library?"
@@ -391,9 +418,9 @@ A compatible conversation integration can therefore answer questions such as:
 - "Where is Guest up to in that show?"
 - "Mark that episode as watched."
 
-The LLM guidance distinguishes fuzzy search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval and understands that Watchlist is not affected by the configured household-user default.
+The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval and understands that Watchlist is not affected by the configured household-user default.
 
-Watch-state mutation tools are **not exposed to Assist by default**. When explicitly enabled in the integration options, the model is instructed to use them only for an explicit user request, resolve an exact local `rating_key` with a read tool first, and never invent an identifier. In multi-server setups, write tools expose only the server entries on which this option is enabled.
+Watch-state mutation tools and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins. When explicitly enabled in the integration options, the model is instructed to use them only for an explicit user request, resolve an exact local `rating_key` with a read tool first, and never invent an identifier. In multi-server setups, write tools expose only the server entries on which this option is enabled.
 
 LLM search/list/query tools omit summaries by default to keep broad results token-efficient. LLM result limits are capped at 25; regular Home Assistant actions allow up to 50 and continue to include summaries by default for backwards compatibility.
 
