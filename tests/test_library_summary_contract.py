@@ -6,6 +6,17 @@ ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
 
 
+def _documentation() -> str:
+    return "\n".join(
+        path.read_text()
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "action-reference.md",
+            ROOT / "docs" / "assist-reference.md",
+        )
+    )
+
+
 def test_library_summary_reuses_structured_query_contract() -> None:
     """Summary filters should evolve with query_library rather than fork from it."""
     service = (COMPONENT / "library_summary_service.py").read_text()
@@ -36,10 +47,10 @@ def test_watched_and_metadata_facets_use_bounded_hydration() -> None:
     assert "server.fetchItems(chunk)" in backend
 
 
-def test_library_summary_is_exposed_in_developer_tools_and_readme() -> None:
+def test_library_summary_is_exposed_in_developer_tools_and_docs() -> None:
     """The public action and native LLM tool should be discoverable/documented."""
     services = (COMPONENT / "services.yaml").read_text()
-    readme = (ROOT / "README.md").read_text()
+    docs = _documentation()
     setup = (COMPONENT / "__init__.py").read_text()
 
     assert "\nlibrary_summary:\n" in services
@@ -55,8 +66,8 @@ def test_library_summary_is_exposed_in_developer_tools_and_readme() -> None:
     ):
         assert f"            - {facet}\n" in services
     assert "async_setup_library_summary_service" in setup
-    assert "plex_extended.library_summary" in readme
-    assert "plex_extended__library_summary" in readme
+    assert "plex_extended.library_summary" in docs
+    assert "plex_extended__library_summary" in docs
 
 
 def test_library_summary_is_read_only_response_data() -> None:
