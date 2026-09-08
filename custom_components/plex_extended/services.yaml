@@ -337,6 +337,260 @@ query_library:
       selector:
         boolean:
 
+
+library_summary:
+  name: Library summary
+  description: Return an exact aggregate count for a structured Plex library query, optionally with facet breakdowns or total duration.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    media_type:
+      name: Media type
+      description: Type of Plex item to return.
+      required: true
+      selector:
+        select:
+          options:
+            - movie
+            - show
+            - season
+            - episode
+            - artist
+            - album
+            - track
+    library:
+      name: Library
+      description: Optional Plex library name. If omitted, Plex Extended uses it automatically only when exactly one compatible library exists.
+      selector:
+        text:
+    library_id:
+      name: Library ID
+      description: Optional stable Plex library section ID returned by List libraries.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default Plex user for watched, unwatched, in-progress and other user-state fields.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
+    title:
+      name: Title contains
+      description: Optional partial title filter.
+      selector:
+        text:
+    genres:
+      name: Any genre
+      description: Match any supplied genre. A single value can be entered in the UI; YAML can supply a list.
+      selector:
+        text:
+    genres_all:
+      name: All genres
+      description: Require all supplied genres. A single value can be entered in the UI; YAML can supply a list.
+      selector:
+        text:
+    actors:
+      name: Actors
+      description: Match any supplied actor. YAML can supply a list.
+      selector:
+        text:
+    directors:
+      name: Directors
+      description: Match any supplied director. YAML can supply a list.
+      selector:
+        text:
+    collections:
+      name: Collections
+      description: Match any supplied Plex collection. YAML can supply a list.
+      selector:
+        text:
+    content_ratings:
+      name: Content ratings
+      description: Match any supplied content rating, such as PG-13 or TV-MA. YAML can supply a list.
+      selector:
+        text:
+    studios:
+      name: Studios
+      description: Match any supplied studio. YAML can supply a list.
+      selector:
+        text:
+    year:
+      name: Exact year
+      selector:
+        number:
+          min: 0
+          max: 9999
+          mode: box
+    year_min:
+      name: Earliest year
+      description: Inclusive minimum year.
+      selector:
+        number:
+          min: 0
+          max: 9999
+          mode: box
+    year_max:
+      name: Latest year
+      description: Inclusive maximum year.
+      selector:
+        number:
+          min: 0
+          max: 9999
+          mode: box
+    decade:
+      name: Decade
+      description: Decade beginning year, for example 1980.
+      selector:
+        number:
+          min: 0
+          max: 9990
+          step: 10
+          mode: box
+    watched_state:
+      name: Watched state
+      default: any
+      description: Plex-native watched state filter evaluated for the selected/default Plex user.
+      selector:
+        select:
+          options:
+            - any
+            - watched
+            - unwatched
+            - in_progress
+    resolutions:
+      name: Resolutions
+      description: Match Plex resolution values such as 4k, 1080 or 720. YAML can supply a list.
+      selector:
+        text:
+    hdr:
+      name: HDR state
+      default: any
+      selector:
+        select:
+          options:
+            - any
+            - hdr
+            - sdr
+    critic_rating_min:
+      name: Minimum critic rating
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+    critic_rating_max:
+      name: Maximum critic rating
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+    audience_rating_min:
+      name: Minimum audience rating
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+    audience_rating_max:
+      name: Maximum audience rating
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+    user_rating_min:
+      name: Minimum user rating
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+    user_rating_max:
+      name: Maximum user rating
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          mode: box
+    duration_min_minutes:
+      name: Minimum runtime
+      description: Inclusive minimum runtime in minutes.
+      selector:
+        number:
+          min: 0
+          mode: box
+    duration_max_minutes:
+      name: Maximum runtime
+      description: Inclusive maximum runtime in minutes.
+      selector:
+        number:
+          min: 0
+          mode: box
+    added_after:
+      name: Added after
+      description: Plex date such as 2026-01-01, or a relative value such as 30d.
+      selector:
+        text:
+    added_before:
+      name: Added before
+      description: Plex date such as 2026-01-01, or a relative value such as 30d.
+      selector:
+        text:
+    last_viewed_after:
+      name: Last viewed after
+      description: Plex date such as 2026-01-01, or a relative value such as 30d.
+      selector:
+        text:
+    last_viewed_before:
+      name: Last viewed before
+      description: Plex date such as 2026-01-01, or a relative value such as 30d.
+      selector:
+        text:
+    facets:
+      name: Facets
+      description: Optional compact breakdowns of the matching items. Multi-valued facets count an item once in each value it belongs to.
+      selector:
+        select:
+          multiple: true
+          options:
+            - genre
+            - year
+            - decade
+            - resolution
+            - watched_state
+            - content_rating
+            - studio
+            - collection
+    facet_limit:
+      name: Facet value limit
+      description: Maximum number of values returned for each requested facet, ordered by count.
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_total_duration:
+      name: Include total duration
+      description: Sum duration for matching items and report how many items did or did not expose duration metadata.
+      default: false
+      selector:
+        boolean:
 watch_status:
   name: TV watch status
   description: Return episode-level viewing progress for one Plex TV show, including completion, last watched episode, current progress and the next episode to watch.

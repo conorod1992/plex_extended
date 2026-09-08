@@ -2,7 +2,7 @@
 
 Plex Extended is a Home Assistant custom integration that exposes Plex as a queryable media library rather than only as a media player.
 
-It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, structured library discovery, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, active playback sessions, metadata, libraries, and users.
+It complements Home Assistant's built-in Plex integration with response-data actions and native Home Assistant LLM tools for title search, structured library discovery, aggregate library summaries, TV viewing progress, recent media, watch history, collections, playlists, Plex Watchlist, Continue Watching, On Deck, active playback sessions, metadata, libraries, and users.
 
 ## Highlights
 
@@ -13,6 +13,7 @@ It complements Home Assistant's built-in Plex integration with response-data act
 - Exposes query results as **response data**, avoiding huge list-like sensor attributes.
 - Contributes **native Home Assistant LLM tools** to the built-in Assist LLM API.
 - Supports fuzzy title search and typed advanced library filtering.
+- Supports exact aggregate counts and facet breakdowns without returning large item lists.
 - Exposes episode-level TV progress, last watched/current episode, and the next episode to watch.
 - Exposes current Plex playback sessions, including player/progress and direct-play/direct-stream/transcode details.
 - Supports bounded recent-media queries and optional TV show/season grouping for large imports.
@@ -131,6 +132,31 @@ Supported typed criteria include partial title; genre; actor/director/collection
 
 `media_type` can be `movie`, `show`, `season`, `episode`, `artist`, `album`, or `track`. If no library is supplied, Plex Extended automatically selects one only when exactly one compatible library exists. The action deliberately exposes a curated typed interface rather than arbitrary Plex filter dictionaries.
 
+
+### `plex_extended.library_summary`
+
+Returns an exact aggregate count using the same structured filters as `query_library`, without returning a list of matching media. This is the preferred action for questions such as “how many unwatched horror movies do I have?” or “which decades are most represented in my movie library?”.
+
+```yaml
+action: plex_extended.library_summary
+data:
+  media_type: movie
+  genres:
+    - Horror
+  watched_state: unwatched
+  facets:
+    - decade
+    - resolution
+  facet_limit: 10
+  include_total_duration: true
+response_variable: plex_summary
+```
+
+Supported facets are `genre`, `year`, `decade`, `resolution`, `watched_state`, `content_rating`, `studio`, and `collection`. Facets are ordered by descending count and carry `total_values` plus `truncated`, so a limited “top values” response cannot be mistaken for the complete distribution. Multi-valued facets such as genre, collection, and resolution count one item once in each distinct value it belongs to, so those facet counts can legitimately sum above the overall media count.
+
+Count-only requests that use Plex-native filters read Plex's filtered `totalSize` directly instead of downloading all matching media. Requests for facets, total duration, or criteria that require PlexAPI-side post-filtering materialize the exact matching set. Tag/technical facets hydrate metadata in bounded rating-key batches rather than triggering one reload per item.
+
+When `include_total_duration` is enabled, the response includes `total_duration_minutes`, `duration_items`, and `duration_missing_items`; missing duration metadata is therefore explicit rather than silently treated as zero.
 ### `plex_extended.watch_status`
 
 Return episode-level viewing progress for one TV show using either its stable Plex `rating_key` or a title.
@@ -322,6 +348,7 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 
 - `plex_extended__search`
 - `plex_extended__query_library`
+- `plex_extended__library_summary`
 - `plex_extended__watch_status`
 - `plex_extended__recently_added`
 - `plex_extended__recently_watched`
@@ -343,6 +370,8 @@ A compatible conversation integration can therefore answer questions such as:
 
 - "Do I have Alien on Plex?"
 - "Find an unwatched horror movie from the 1980s around 90 to 120 minutes."
+- "How many unwatched horror movies do I have?"
+- "Which decades have the most movies in my library?"
 - "Where am I up to in Resident Alien?"
 - "What was added to Plex in the last week?"
 - "Which TV shows got new episodes this week?"
@@ -356,7 +385,7 @@ A compatible conversation integration can therefore answer questions such as:
 - "Where is Guest up to in that show?"
 - "Mark that episode as watched."
 
-The LLM guidance distinguishes fuzzy search, structured library querying, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval and understands that Watchlist is not affected by the configured household-user default.
+The LLM guidance distinguishes fuzzy search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval and understands that Watchlist is not affected by the configured household-user default.
 
 Watch-state mutation tools are **not exposed to Assist by default**. When explicitly enabled in the integration options, the model is instructed to use them only for an explicit user request, resolve an exact local `rating_key` with a read tool first, and never invent an identifier. In multi-server setups, write tools expose only the server entries on which this option is enabled.
 
@@ -390,7 +419,7 @@ Plex Extended keeps the Home Assistant action and native LLM layers as thin inte
 Plex Media Server / plex.tv
           │
           ▼
-PlexExtendedClient + user context + query/progress/recent/list backends
+PlexExtendedClient + user context + query/summary/progress/recent/list backends
           │
           ├── Home Assistant response-data actions
           │
@@ -404,7 +433,7 @@ This prevents action and LLM behavior from drifting apart. User-scoped server co
 Plex Extended does **not** override or monkey-patch Home Assistant's built-in `plex` integration.
 
 - **Home Assistant Plex:** media players, playback, server/client activity, and existing Plex media-source behavior.
-- **Plex Extended:** querying the library, metadata, recent additions, collections/playlists/Watchlist, active playback sessions, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.
+- **Plex Extended:** querying and aggregating the library, metadata, recent additions, collections/playlists/Watchlist, active playback sessions, per-user viewing state/history/progress, controlled watch-state updates, and LLM/automation access.
 
 Both integrations can be configured against the same Plex account/server at the same time.
 

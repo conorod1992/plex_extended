@@ -13,6 +13,7 @@ from homeassistant.helpers.llm import LLMContext
 from .active_streams_llm import ActiveStreamsPlexTool
 from .client import PlexExtendedClient
 from .const import CONF_ALLOW_LLM_MUTATIONS
+from .library_summary_llm import LibrarySummaryPlexTool
 from .llm_tools import (
     MarkUnwatchedPlexTool,
     MarkWatchedPlexTool,
@@ -34,6 +35,11 @@ _ACTIVE_STREAMS_PROMPT = (
     " Use active_streams for questions about what is playing on Plex right now, who is "
     "currently using Plex, player/playback state, progress, local versus remote playback, "
     "or whether a current session is direct play, direct stream, or transcoding."
+)
+_LIBRARY_SUMMARY_PROMPT = (
+    " Use library_summary instead of query_library when the user wants an exact count, "
+    "a grouped breakdown/facet, or total runtime rather than a list of matching media. "
+    "Request only the facets needed for the answer to keep responses compact."
 )
 
 
@@ -92,7 +98,12 @@ def async_get_tools(
     }
 
     tools = [tool for tool in result.tools if tool.name not in _MUTATION_TOOL_NAMES]
-    tools.append(ActiveStreamsPlexTool(clients))
+    tools.extend(
+        [
+            ActiveStreamsPlexTool(clients),
+            LibrarySummaryPlexTool(clients),
+        ]
+    )
     if mutation_clients:
         force_server_selector = len(clients) > 1
         tools.extend(
@@ -111,6 +122,6 @@ def async_get_tools(
     prompt = result.prompt
     if not mutation_clients and prompt:
         prompt = prompt.replace(_MUTATION_PROMPT, "")
-    prompt = f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}"
+    prompt = f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}{_LIBRARY_SUMMARY_PROMPT}"
 
     return LLMTools(tools=tools, prompt=prompt)
