@@ -58,11 +58,7 @@ jobs:
           CURRENT_VERSION: ${{ steps.version.outputs.current_version }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if LATEST_RELEASE="$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null)"; then
-            :
-          else
-            LATEST_RELEASE=""
-          fi
+          LATEST_RELEASE="$(gh api "repos/${{ github.repository }}/releases?per_page=1" --jq '.[0].tag_name // ""')"
 
           if [[ -z "$LATEST_RELEASE" ]]; then
             if [[ "$VERSION" != "$CURRENT_VERSION" ]]; then
