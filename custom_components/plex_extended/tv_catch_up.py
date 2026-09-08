@@ -149,20 +149,39 @@ def _serialize_group(
 def _scan_section(
     section: Any,
     window: RecentWindow,
+    *,
+    include_in_progress: bool,
 ) -> tuple[list[Any], bool]:
-    """Fetch a bounded, newest-first candidate set and report scan truncation."""
-    filters = _added_filters(window)
-    filters["unwatched"] = True
-    found = list(
-        section.search(
-            sort="addedAt:desc",
-            maxresults=_CANDIDATE_SCAN_LIMIT + 1,
-            libtype="episode",
-            filters=filters,
+    """Fetch bounded unwatched/in-progress candidates and report scan truncation."""
+    base_filters = _added_filters(window)
+    state_filters = [{"unwatched": True}]
+    if include_in_progress:
+        state_filters.append({"inProgress": True})
+
+    results: list[Any] = []
+    seen: set[str] = set()
+    truncated = False
+    for state_filter in state_filters:
+        filters = {**base_filters, **state_filter}
+        found = list(
+            section.search(
+                sort="addedAt:desc",
+                maxresults=_CANDIDATE_SCAN_LIMIT + 1,
+                libtype="episode",
+                filters=filters,
+            )
         )
-    )
-    truncated = len(found) > _CANDIDATE_SCAN_LIMIT
-    return found[:_CANDIDATE_SCAN_LIMIT], truncated
+        truncated = truncated or len(found) > _CANDIDATE_SCAN_LIMIT
+        for episode in found[:_CANDIDATE_SCAN_LIMIT]:
+            rating_key = getattr(episode, "ratingKey", None)
+            identity = str(rating_key) if rating_key is not None else f"object:{id(episode)}"
+            if identity in seen:
+                continue
+            seen.add(identity)
+            results.append(episode)
+
+    results.sort(key=lambda item: _item_epoch(item, "addedAt") or 0, reverse=True)
+    return results, truncated
 
 
 def _tv_catch_up(
@@ -192,7 +211,11 @@ def _tv_catch_up(
         criteria.get("library"),
         criteria.get("library_id"),
     ):
-        candidates, truncated = _scan_section(section, window)
+        candidates, truncated = _scan_section(
+            section,
+            window,
+            include_in_progress=include_in_progress,
+        )
         candidate_scan_truncated = candidate_scan_truncated or truncated
         for episode in candidates:
             if str(getattr(episode, "type", "")) != "episode":
@@ -257,7 +280,7 @@ def _tv_catch_up(
         "in_progress_episode_count": in_progress_episode_count,
         "results_truncated": len(ordered) > len(returned_groups),
         "candidate_scan_truncated": candidate_scan_truncated,
-        "candidate_scan_limit_per_library": _CANDIDATE_SCAN_LIMIT,
+        "candidate_scan_limit_per_query": _CANDIDATE_SCAN_LIMIT,
         "include_specials": include_specials,
         "include_in_progress": include_in_progress,
         "results": [
