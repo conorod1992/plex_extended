@@ -4,6 +4,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 
+
+def _documentation() -> str:
+    return "\n".join(
+        path.read_text()
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "action-reference.md",
+            ROOT / "docs" / "assist-reference.md",
+        )
+    )
+
+
 def test_options_and_provider_share_native_tool_setting() -> None:
     const = (ROOT / "custom_components/plex_extended/const.py").read_text()
     flow = (ROOT / "custom_components/plex_extended/config_flow.py").read_text()
@@ -13,15 +25,17 @@ def test_options_and_provider_share_native_tool_setting() -> None:
     assert "enabled_llm_clients(_loaded_clients(hass))" in provider
     assert "type(tool)(clients)" in provider
 
+
 def test_ui_docs_and_diagnostics_expose_policy() -> None:
     strings = (ROOT / "custom_components/plex_extended/strings.json").read_text()
     translation = (ROOT / "custom_components/plex_extended/translations/en.json").read_text()
     diagnostics = (ROOT / "custom_components/plex_extended/diagnostics.py").read_text()
-    readme = (ROOT / "README.md").read_text()
+    docs = _documentation()
     for text in (strings, translation):
         assert '"enable_llm_tools": "Enable native Assist tools"' in text
     assert '"native_assist_tools_enabled"' in diagnostics
-    assert "### Native Assist tool exposure" in readme
+    assert "Native Assist tool exposure" in docs
+
 
 def test_temporary_workflow_is_removed() -> None:
     assert not (ROOT / ".github/workflows/configuration-polish.yml").exists()
