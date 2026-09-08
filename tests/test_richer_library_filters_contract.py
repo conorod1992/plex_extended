@@ -6,6 +6,17 @@ ROOT = Path(__file__).parents[1]
 COMPONENT = ROOT / "custom_components" / "plex_extended"
 
 
+def _documentation() -> str:
+    return "\n".join(
+        path.read_text()
+        for path in (
+            ROOT / "README.md",
+            ROOT / "docs" / "action-reference.md",
+            ROOT / "docs" / "assist-reference.md",
+        )
+    )
+
+
 def test_action_and_llm_schemas_expose_same_new_filters() -> None:
     services = (COMPONENT / "services.py").read_text()
     llm = (COMPONENT / "llm_tools.py").read_text()
@@ -28,7 +39,7 @@ def test_action_and_llm_schemas_expose_same_new_filters() -> None:
 def test_summary_facets_and_developer_tools_include_new_dimensions() -> None:
     const = (COMPONENT / "const.py").read_text()
     yaml = (COMPONENT / "services.yaml").read_text()
-    readme = (ROOT / "README.md").read_text()
+    docs = _documentation()
     for facet in (
         "label",
         "country",
@@ -41,7 +52,7 @@ def test_summary_facets_and_developer_tools_include_new_dimensions() -> None:
     ):
         assert f'"{facet}"' in const
         assert f"- {facet}" in yaml
-        assert f"`{facet}`" in readme
+        assert f"`{facet}`" in docs
 
 
 def test_native_and_technical_filters_remain_separate() -> None:
