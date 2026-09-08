@@ -181,6 +181,26 @@ response_variable: plex_progress
 
 The response includes overall completion state, episode counts, completion percentage, last watched/current activity, the in-progress episode, next episode, and optionally per-season progress. Season 0/specials are excluded by default. Plex Extended prefers Plex's own On Deck result for the next episode and falls back to canonical episode order when necessary.
 
+
+### `plex_extended.tv_catch_up`
+
+Returns TV episodes the selected/default Plex user still has to watch, grouped by show. It is intended for cross-show questions such as “what new episodes do I have to catch up on?”; use `watch_status` instead for detailed progress in one specific show.
+
+```yaml
+action: plex_extended.tv_catch_up
+data:
+  within_days: 14
+  include_specials: false
+  include_in_progress: true
+  limit: 10
+  episode_limit: 5
+response_variable: plex_catch_up
+```
+
+The optional `since`, `before`, and `within_days` fields use the same added-time semantics as `recently_added`: `since` is inclusive, `before` is exclusive, and date-only/timezone-less values use Home Assistant's configured timezone. With no time window the action returns a bounded newest-first catch-up queue rather than imposing an arbitrary hidden date cutoff.
+
+Plex Extended asks PMS for unwatched candidates and, when enabled, in-progress candidates separately, then deduplicates and re-checks viewing state client-side. Season 0/specials are excluded by default. Results distinguish never-started from partially watched episodes, group them by stable show identity, return episodes in canonical season/episode order, and report independent show/episode-detail truncation. Candidate scans are capped at 1,000 episodes per Plex state query per TV library; `candidate_scan_truncated` is explicit if that safety bound is reached.
+
 ### `plex_extended.recently_added`
 
 Returns recently added media with optional exact time windows and TV episode grouping.
@@ -395,6 +415,7 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 - `plex_extended__query_library`
 - `plex_extended__library_summary`
 - `plex_extended__watch_status`
+- `plex_extended__tv_catch_up`
 - `plex_extended__recently_added`
 - `plex_extended__recently_watched`
 - `plex_extended__continue_watching`
@@ -424,6 +445,7 @@ A compatible conversation integration can therefore answer questions such as:
 - "How many unwatched horror movies do I have?"
 - "Which decades have the most movies in my library?"
 - "Where am I up to in Resident Alien?"
+- "What new TV episodes do I have to catch up on?"
 - "What was added to Plex in the last week?"
 - "Which TV shows got new episodes this week?"
 - "What did I watch between Monday and Friday?"
@@ -438,7 +460,7 @@ A compatible conversation integration can therefore answer questions such as:
 - "Where is Guest up to in that show?"
 - "Mark that episode as watched."
 
-The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, TV progress, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval or mutation, and understands that regular playlists use the selected/default household-user context while Watchlist is account-level.
+The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, single-show TV progress, cross-show TV catch-up, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval or mutation, and understands that regular playlists use the selected/default household-user context while Watchlist is account-level.
 
 Watch-state, regular-playlist, and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins. When explicitly enabled, the model is instructed to act only on an explicit user request and to resolve exact Plex identifiers with read tools first rather than inventing them. Playlist add/remove additionally require the exact playlist `rating_key` from `list_playlists`. In multi-server setups, each write-tool family exposes only the server entries on which its own option is enabled.
 

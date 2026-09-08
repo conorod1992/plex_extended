@@ -772,6 +772,92 @@ watch_status:
       selector:
         boolean:
 
+
+tv_catch_up:
+  name: TV catch-up
+  description: Return unwatched and optionally in-progress TV episodes for the selected/default Plex user, grouped by show and ordered by newest addition.
+  fields:
+    config_entry_id:
+      name: Plex server
+      description: Plex Extended server to query. Optional when only one server is configured.
+      selector:
+        config_entry:
+          integration: plex_extended
+    library:
+      name: TV library
+      description: Optional exact TV library name.
+      selector:
+        text:
+    library_id:
+      name: TV library ID
+      description: Optional stable TV library section ID returned by List libraries.
+      selector:
+        text:
+    user:
+      name: Plex user
+      description: Optional Plex user name. Overrides the configured default user for watch state.
+      selector:
+        text:
+    user_id:
+      name: Plex user ID
+      description: Optional stable Plex account ID returned by List users. Overrides the configured default user; if both name and ID are supplied, they must match.
+      selector:
+        text:
+    since:
+      name: Since
+      description: Inclusive added-time start. Use an ISO date or datetime; date-only and timezone-less values use Home Assistant's timezone.
+      selector:
+        text:
+    before:
+      name: Before
+      description: Exclusive added-time end. Use an ISO date or datetime; date-only and timezone-less values use Home Assistant's timezone.
+      selector:
+        text:
+    within_days:
+      name: Within days
+      description: Restrict to episodes added during the trailing number of days. Cannot be combined with Since or Before.
+      selector:
+        number:
+          min: 1
+          max: 3650
+          mode: box
+    include_specials:
+      name: Include specials
+      description: Include season 0/special episodes in the catch-up results.
+      default: false
+      selector:
+        boolean:
+    include_in_progress:
+      name: Include in-progress episodes
+      description: Include partially watched episodes as remaining catch-up items in addition to never-started episodes.
+      default: true
+      selector:
+        boolean:
+    limit:
+      name: Show limit
+      description: Maximum number of show groups returned. Overall matched counts are reported separately.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    episode_limit:
+      name: Episode detail limit per show
+      description: Maximum number of episode objects returned inside each show group. Group counts still include all matching scanned episodes.
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    include_summary:
+      name: Include summaries
+      description: Include episode summaries in returned episode detail.
+      default: true
+      selector:
+        boolean:
+
 recently_added:
   name: Recently added
   description: Return recently added Plex media with optional time windows and TV episode grouping.
