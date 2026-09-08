@@ -39,6 +39,7 @@ FEATURES = [
     "library_summary",
     "watch_status",
     "tv_catch_up",
+    "related_media",
     "recently_added",
     "recently_watched",
     "continue_watching",

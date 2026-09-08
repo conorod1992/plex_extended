@@ -201,6 +201,27 @@ The optional `since`, `before`, and `within_days` fields use the same added-time
 
 Plex Extended asks PMS for unwatched candidates and, when enabled, in-progress candidates separately, then deduplicates and re-checks viewing state client-side. Season 0/specials are excluded by default. Results distinguish never-started from partially watched episodes, group them by stable show identity, return episodes in canonical season/episode order, and report independent show/episode-detail truncation. Candidate scans are capped at 1,000 episodes per Plex state query per TV library; `candidate_scan_truncated` is explicit if that safety bound is reached.
 
+
+### `plex_extended.related_media`
+
+Returns Plex's own related/recommendation hubs for one exact local movie or TV show. Plex's hub categories are preserved rather than flattened into a Plex Extended scoring algorithm, so the response can retain distinctions such as related titles or recommendations connected through people/metadata.
+
+```yaml
+action: plex_extended.related_media
+data:
+  rating_key: "1234"
+  hub_limit: 6
+  item_limit: 5
+  include_summary: false
+response_variable: plex_related
+```
+
+`rating_key` must be the exact positive numeric local ID returned by a Plex Extended read action such as `search` or `query_library`. Movies and TV shows are supported. Optional `library` / `library_id` fields assert the seed item's library rather than performing a fuzzy lookup.
+
+The query runs in the selected/default Plex household-user context, so viewing-state metadata on returned local items follows the same user semantics as other Plex Extended library reads. Provider/online objects from Plex's related endpoint are excluded: a recommendation must expose both a local `rating_key` and `librarySectionID` to be returned.
+
+Plex Extended uses the related items already included in Plex's hub response and deliberately does not auto-expand hubs that report `more`. Each hub reports `more_available_from_plex` and `results_truncated`, while the top-level response independently reports hub truncation. Items are deduplicated within a hub but may appear in multiple different hubs because that cross-hub repetition preserves Plex's explanation for why the title is related.
+
 ### `plex_extended.recently_added`
 
 Returns recently added media with optional exact time windows and TV episode grouping.
@@ -416,6 +437,7 @@ Home Assistant 2026.8+ automatically discovers `custom_components/plex_extended/
 - `plex_extended__library_summary`
 - `plex_extended__watch_status`
 - `plex_extended__tv_catch_up`
+- `plex_extended__related_media`
 - `plex_extended__recently_added`
 - `plex_extended__recently_watched`
 - `plex_extended__continue_watching`
@@ -446,6 +468,7 @@ A compatible conversation integration can therefore answer questions such as:
 - "Which decades have the most movies in my library?"
 - "Where am I up to in Resident Alien?"
 - "What new TV episodes do I have to catch up on?"
+- "What do I have on Plex that is similar to Alien?"
 - "What was added to Plex in the last week?"
 - "Which TV shows got new episodes this week?"
 - "What did I watch between Monday and Friday?"
@@ -460,7 +483,7 @@ A compatible conversation integration can therefore answer questions such as:
 - "Where is Guest up to in that show?"
 - "Mark that episode as watched."
 
-The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, single-show TV progress, cross-show TV catch-up, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval or mutation, and understands that regular playlists use the selected/default household-user context while Watchlist is account-level.
+The LLM guidance distinguishes local fuzzy search, Plex Discover search, structured item queries, aggregate library summaries, single-show TV progress, cross-show TV catch-up, Plex-native related-media recommendations, recent-media windows, collections/playlists, and account-level Watchlist. It prefers stable rating keys when moving from collection/playlist listing to item retrieval or mutation, and understands that regular playlists use the selected/default household-user context while Watchlist is account-level.
 
 Watch-state, regular-playlist, and account-Watchlist mutation tools are **not exposed to Assist by default**. They use separate opt-ins. When explicitly enabled, the model is instructed to act only on an explicit user request and to resolve exact Plex identifiers with read tools first rather than inventing them. Playlist add/remove additionally require the exact playlist `rating_key` from `list_playlists`. In multi-server setups, each write-tool family exposes only the server entries on which its own option is enabled.
 

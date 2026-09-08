@@ -35,6 +35,7 @@ from .llm_tools import (
     _loaded_clients,
     async_get_tools as _async_get_tools,
 )
+from .related_media_llm import RelatedMediaPlexTool
 from .tv_catch_up_llm import TvCatchUpPlexTool
 
 _MUTATION_TOOL_NAMES = {
@@ -58,6 +59,12 @@ _TV_CATCH_UP_PROMPT = (
     "within_days/since/before fields when the user specifies a recent time period. Use "
     "watch_status instead when the question is about progress or the next episode in one "
     "specific show."
+)
+_RELATED_MEDIA_PROMPT = (
+    " Use related_media when the user asks for local Plex movies or shows related/similar "
+    "to a particular local title. Resolve the seed title to an exact local rating_key with "
+    "search or query_library first. Preserve Plex's returned hub categories as explanation "
+    "of why items are related; do not invent a ranking across different hubs."
 )
 _DISCOVER_PROMPT = (
     " Use discover_search for movies/shows in Plex Discover, especially titles that may "
@@ -165,6 +172,7 @@ def async_get_tools(
             ActiveStreamsPlexTool(clients),
             LibrarySummaryPlexTool(clients),
             TvCatchUpPlexTool(clients),
+            RelatedMediaPlexTool(clients),
             DiscoverSearchPlexTool(clients),
         ]
     )
@@ -222,7 +230,7 @@ def async_get_tools(
         prompt = prompt.replace(_MUTATION_PROMPT, "")
     prompt = (
         f"{prompt or ''}{_ACTIVE_STREAMS_PROMPT}{_TV_CATCH_UP_PROMPT}"
-        f"{_LIBRARY_SUMMARY_PROMPT}{_DISCOVER_PROMPT}"
+        f"{_RELATED_MEDIA_PROMPT}{_LIBRARY_SUMMARY_PROMPT}{_DISCOVER_PROMPT}"
         f"{_WATCHLIST_MUTATION_PROMPT if watchlist_mutation_clients else ''}"
         f"{_PLAYLIST_MUTATION_PROMPT if playlist_mutation_clients else ''}"
     )
