@@ -77,7 +77,11 @@ class FakeSection:
 
     def search(self, **kwargs):
         self.search_calls.append(kwargs)
-        return list(self.items)[: kwargs.get("maxresults")]
+        matching = [
+            item for item in self.items
+            if kwargs.get("libtype") is None or item.type == kwargs["libtype"]
+        ]
+        return matching[: kwargs.get("maxresults")]
 
     def recentlyAdded(self, maxresults=50, libtype=None):
         self.recent_calls.append({"maxresults": maxresults, "libtype": libtype})
@@ -312,3 +316,77 @@ def test_history_honors_since_and_before_while_paging() -> None:
     assert "viewedAt%3E" in server.fetch_calls[0]["key"]
     assert result["window"]["since"].startswith("2026-09-07T16:00:00+01:00")
     assert result["window"]["before"].startswith("2026-09-07T19:00:00+01:00")
+
+
+def test_episode_filter_works_without_window_in_selected_library() -> None:
+    """Plex's default show type must not discard explicitly requested episodes."""
+    added = datetime(2026, 9, 7, 20, tzinfo=ZoneInfo("UTC"))
+    tv = FakeSection("2", "TV Shows", "show")
+    tv.items = [
+        SimpleNamespace(type="show", title="Resident Alien", ratingKey="show-10",
+                        librarySectionID=2, addedAt=added),
+        _episode("Pilot", 1, 1, added),
+        _episode("Homesick", 1, 2, added),
+    ]
+    result = _recently_added(
+        _client(FakeServer([tv])),
+        {"library_id": "2", "media_types": ["episode"], "limit": 1,
+         "include_summary": False},
+    )
+    assert [item["title"] for item in result["results"]] == ["Pilot"]
+    assert tv.recent_calls == [{"maxresults": 1, "libtype": "episode"}]
+
+
+def test_episode_filter_is_consistent_with_and_without_window() -> None:
+    """Time-window selection must not unexpectedly change requested media types."""
+    added = datetime(2026, 9, 7, 20, tzinfo=ZoneInfo("UTC"))
+    tv = FakeSection("2", "TV Shows", "show")
+    tv.items = [_episode("Pilot", 1, 1, added)]
+    client = _client(FakeServer([tv]))
+    baseline = _recently_added(
+        client, {"media_types": ["episode"], "include_summary": False}
+    )
+    windowed = _recently_added(
+        client, {"media_types": ["episode"], "since": "2026-09-07",
+                 "include_summary": False},
+    )
+    assert baseline["results"] == windowed["results"]
+    assert tv.recent_calls[0]["libtype"] == "episode"
+    assert tv.search_calls[0]["libtype"] == "episode"
+
+
+def test_track_filter_is_applied_by_plex_before_limiting() -> None:
+    """A music section should return tracks rather than only its default artists."""
+    added = datetime(2026, 9, 7, 20, tzinfo=ZoneInfo("UTC"))
+    music = FakeSection("3", "Music", "artist")
+    music.items = [
+        SimpleNamespace(type="artist", title="Artist", ratingKey="a",
+                        librarySectionID=3, addedAt=added),
+        SimpleNamespace(type="track", title="Track", ratingKey="t",
+                        librarySectionID=3, addedAt=added),
+    ]
+    result = _recently_added(
+        _client(FakeServer([music])),
+        {"library_id": "3", "media_types": ["track"], "limit": 1,
+         "include_summary": False},
+    )
+    assert [item["title"] for item in result["results"]] == ["Track"]
+    assert music.recent_calls[0]["libtype"] == "track"
+
+
+def test_recently_added_default_uses_same_type_with_or_without_window() -> None:
+    """The default TV section type should not silently switch with a time filter."""
+    added = datetime(2026, 9, 7, 20, tzinfo=ZoneInfo("UTC"))
+    tv = FakeSection("2", "TV Shows", "show")
+    tv.items = [
+        SimpleNamespace(type="show", title="Resident Alien", ratingKey="s",
+                        librarySectionID=2, addedAt=added),
+        _episode("Pilot", 1, 1, added),
+    ]
+    client = _client(FakeServer([tv]))
+    plain = _recently_added(client, {"include_summary": False})
+    bounded = _recently_added(
+        client, {"since": "2026-09-07", "include_summary": False}
+    )
+    assert [item["title"] for item in plain["results"]] == ["Resident Alien"]
+    assert plain["results"] == bounded["results"]
