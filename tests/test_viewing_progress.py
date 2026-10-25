@@ -9,6 +9,8 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 import pytest
+from plexapi.exceptions import Unauthorized
+from requests.exceptions import ConnectionError
 
 
 ROOT = Path(__file__).parents[1]
@@ -389,3 +391,30 @@ def test_watch_status_requires_title_or_rating_key() -> None:
 
     with pytest.raises(PlexExtendedError, match="Provide either rating_key or title"):
         _watch_status(client, {"include_summary": False})
+
+
+@pytest.mark.parametrize("failure", [Unauthorized("expired"), ConnectionError("offline")])
+def test_watch_status_does_not_hide_on_deck_auth_or_transport_failures(failure) -> None:
+    episode = _episode(1, 1, "Pilot")
+    show = FakeShow("Resident Alien", "10", [episode])
+    def fail():
+        raise failure
+    show.onDeck = fail
+    with pytest.raises(type(failure)):
+        _watch_status(_client(FakeServer([show])), {"rating_key": "10", "include_summary": False})
+
+
+def test_stale_on_deck_watched_episode_falls_back_to_next_unwatched() -> None:
+    first = _episode(1, 1, "Pilot", watched=True)
+    second = _episode(1, 2, "Next")
+    show = FakeShow("Resident Alien", "10", [first, second], on_deck=first)
+    result = _watch_status(_client(FakeServer([show])), {"rating_key": "10", "include_summary": False})
+    assert result["next_episode"]["season_episode"] == "S01E02"
+
+
+def test_on_deck_episode_outside_show_is_not_returned() -> None:
+    first = _episode(1, 1, "Pilot", watched=False)
+    foreign = _episode(3, 7, "Other show")
+    show = FakeShow("Resident Alien", "10", [first], on_deck=foreign)
+    result = _watch_status(_client(FakeServer([show])), {"rating_key": "10", "include_summary": False})
+    assert result["next_episode"]["season_episode"] == "S01E01"
