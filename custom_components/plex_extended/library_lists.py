@@ -203,12 +203,19 @@ def _limited_contents(container: Any, suffix: str, media_types: set[str], limit:
             if not media_types or str(getattr(item, "type", "")) in media_types
         ][:limit]
 
+    # Match PlexAPI Collection.items()/Playlist.items(): their query builder
+    # requests GUIDs and preserves other supported endpoint parameters.
+    build_key = getattr(container, "_buildQueryKey", None)
+    endpoint = f"{key}{suffix}"
+    if callable(build_key):
+        endpoint = build_key(endpoint)
+
     results: list[Any] = []
     offset = 0
     page_size = max(25, limit)
     while len(results) < limit:
         page = list(fetch(
-            f"{key}{suffix}",
+            endpoint,
             container_start=offset,
             container_size=page_size,
             maxresults=page_size,
