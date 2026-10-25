@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from plexapi.exceptions import Unauthorized
+from requests.exceptions import RequestException
+
 from .client import PlexExtendedClient, PlexExtendedError
 from .user_context import resolve_user_context
 
@@ -306,12 +309,24 @@ def _watch_status(
     if not complete and episodes:
         try:
             candidate = show.onDeck()
+        except (Unauthorized, RequestException):
+            raise
         except Exception:
             candidate = None
         if candidate is not None:
-            candidate_season = int(getattr(candidate, "parentIndex", 0) or 0)
-            if include_specials or candidate_season != 0:
-                next_episode = candidate
+            candidate_key = str(getattr(candidate, "ratingKey", "") or "")
+            eligible = next(
+                (
+                    episode
+                    for episode in episodes
+                    if str(getattr(episode, "ratingKey", "") or "") == candidate_key
+                    and candidate_key
+                    and not _is_played(episode)
+                ),
+                None,
+            )
+            if eligible is not None:
+                next_episode = eligible
         if next_episode is None:
             next_episode = next(
                 (episode for episode in episodes if not _is_played(episode)),
