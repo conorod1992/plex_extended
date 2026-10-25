@@ -17,6 +17,8 @@ jobs:
           python-version: "3.13"
       - name: Compile Python
         run: python -m compileall -q custom_components/plex_extended scripts
+      - name: Verify release versions agree
+        run: python scripts/set_release_version.py --check
 
   tests:
     runs-on: ubuntu-latest
