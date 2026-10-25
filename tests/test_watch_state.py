@@ -148,6 +148,7 @@ def test_mark_watched_changes_leaf_item_and_verifies_server_state() -> None:
     assert server.fetch_calls == ["42", "42"]
     assert result == {
         "success": True,
+        "changed": True,
         "operation": "mark_watched",
         "rating_key": "42",
         "type": "movie",
@@ -239,3 +240,27 @@ def test_unconfirmed_server_state_is_an_error() -> None:
 
     with pytest.raises(PlexExtendedError, match="did not confirm"):
         _set_watch_state(_client(server), {"rating_key": "42"}, watched=True)
+
+
+@pytest.mark.parametrize("watched", [True, False])
+def test_repeated_leaf_mutation_does_not_scrobble_again(watched: bool) -> None:
+    server = FakeServer()
+    item = FakeItem("42", "Alien", "movie", watched)
+    server.items["42"] = item
+    result = _set_watch_state(_client(server), {"rating_key": "42"}, watched=watched)
+    assert result["changed"] is False
+    assert result["watched"] is watched
+    assert item.mark_watched_calls == 0
+    assert item.mark_unwatched_calls == 0
+    assert server.fetch_calls == ["42"]
+
+
+@pytest.mark.parametrize("watched", [True, False])
+def test_cascading_mutation_is_not_skipped_by_parent_state(watched: bool) -> None:
+    server = FakeServer()
+    item = FakeItem("9", "Season 1", "season", watched)
+    server.items["9"] = item
+    result = _set_watch_state(_client(server), {"rating_key": "9"}, watched=watched)
+    assert result["changed"] is True
+    assert item.mark_watched_calls + item.mark_unwatched_calls == 1
+    assert result["scope"] == "item_and_children"
