@@ -7,7 +7,7 @@ from typing import Any
 from plexapi.exceptions import Unauthorized
 
 from .client import PlexExtendedClient, PlexExtendedError
-from .const import DEFAULT_LIMIT
+from .const import CONF_ACCOUNT_TOKEN, DEFAULT_LIMIT
 from .user_context import resolve_user_context
 
 _COLLECTION_TYPES = {"movie", "show", "artist", "album"}
@@ -402,6 +402,10 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             maxresults=max_results,
         )
     except Unauthorized as err:
+        if client.entry.data.get(CONF_ACCOUNT_TOKEN):
+            # An original plex.tv login was explicitly stored; let the central
+            # wrapper initiate reauthentication when Plex rejects that token.
+            raise
         raise PlexExtendedError(
             "Plex Watchlist requires a token that can authenticate with plex.tv. "
             "Reconnect Plex Extended using Connect with Plex."
