@@ -126,6 +126,9 @@ class FakeClient:
     def _require_server(self):
         return self.server
 
+    def _plex_account(self):
+        return self.server.myPlexAccount()
+
     @staticmethod
     def _normalize_limit(value):
         return max(1, min(int(value or 10), 50))
