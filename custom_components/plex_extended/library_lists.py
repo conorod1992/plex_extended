@@ -187,6 +187,43 @@ async def async_list_collections(
     return await client._async_run(_list_collections, client, dict(criteria))
 
 
+def _limited_contents(container: Any, suffix: str, media_types: set[str], limit: int) -> list[Any]:
+    """Read only enough Plex container pages to fill a requested result limit.
+
+    PlexAPI's items() eagerly retrieves the entire collection or playlist. Use
+    the same endpoint through fetchItems() with bounded pagination instead.
+    A missing key/fetchItems on test doubles keeps their simple items() contract.
+    """
+    key = getattr(container, "key", None)
+    fetch = getattr(container, "fetchItems", None)
+    if not key or not callable(fetch):
+        items = list(container.items())
+        return [
+            item for item in items
+            if not media_types or str(getattr(item, "type", "")) in media_types
+        ][:limit]
+
+    results: list[Any] = []
+    offset = 0
+    page_size = max(25, limit)
+    while len(results) < limit:
+        page = list(fetch(
+            f"{key}{suffix}",
+            container_start=offset,
+            container_size=page_size,
+            maxresults=page_size,
+        ))
+        for item in page:
+            if not media_types or str(getattr(item, "type", "")) in media_types:
+                results.append(item)
+                if len(results) >= limit:
+                    break
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return results
+
+
 def _collection_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str, Any]:
     """Return items in one Plex collection."""
     context = resolve_user_context(
@@ -197,10 +234,7 @@ def _collection_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> d
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    items = list(collection.items())
-    if media_types:
-        items = [item for item in items if str(getattr(item, "type", "")) in media_types]
-    items = items[:max_results]
+    items = _limited_contents(collection, "/children", media_types, max_results)
 
     result: dict[str, Any] = {
         "success": True,
@@ -302,10 +336,7 @@ def _playlist_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> dic
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    items = list(playlist.items())
-    if media_types:
-        items = [item for item in items if str(getattr(item, "type", "")) in media_types]
-    items = items[:max_results]
+    items = _limited_contents(playlist, "/items", media_types, max_results)
     result: dict[str, Any] = {
         "success": True,
         "playlist": _serialize_playlist(playlist, include_summary=False),
