@@ -16,6 +16,7 @@ from custom_components.plex_extended.const import (
     CONF_ALLOW_LLM_MUTATIONS,
     CONF_ALLOW_LLM_PLAYLIST_MUTATIONS,
     CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
+    CONF_ACCOUNT_TOKEN,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_DEFAULT_USER_ID,
@@ -141,6 +142,7 @@ async def test_website_auth_creates_selected_server_entry(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_SERVER_TOKEN] == "server-token-a"
     assert result["data"][CONF_CLIENT_ID] == "ha-client-id"
+    assert result["data"][CONF_ACCOUNT_TOKEN] == "account-token"
     await hass.async_block_till_done()
     mock_connect.assert_awaited_once()
 
@@ -159,7 +161,7 @@ async def test_reauthentication_updates_credentials(
         context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
         data=entry.data,
     )
-    assert result["type"] is FlowResultType.FORM
+    assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "reauth_confirm"
 
     auth = MagicMock()
@@ -186,7 +188,7 @@ async def test_reauthentication_updates_credentials(
         ),
     ):
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input={}
+            result["flow_id"], user_input={"next_step_id": "website_auth"}
         )
         assert result["type"] is FlowResultType.EXTERNAL_STEP
 
@@ -199,6 +201,7 @@ async def test_reauthentication_updates_credentials(
     assert result["reason"] == "reauth_successful"
     assert entry.data[CONF_SERVER_TOKEN] == "new-server-token"
     assert entry.data[CONF_CLIENT_ID] == "new-ha-client-id"
+    assert entry.data[CONF_ACCOUNT_TOKEN] == "new-account-token"
     await hass.async_block_till_done()
 
 
