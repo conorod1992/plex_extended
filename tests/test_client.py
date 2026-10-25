@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import asyncio
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
@@ -267,3 +268,46 @@ def test_history_accepts_stable_library_and_user_ids() -> None:
 def test_llm_summaries_default_off() -> None:
     """LLM list/search responses should default to compact payloads."""
     assert const.DEFAULT_LLM_INCLUDE_SUMMARY is False
+
+
+def test_connection_rejects_wrong_server_identity(monkeypatch) -> None:
+    """A valid token must never silently connect this entry to another server."""
+    class Server:
+        machineIdentifier = "different-machine"
+
+    monkeypatch.setattr(client_module, "PlexServer", lambda *args: Server())
+
+    class Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    entry = SimpleNamespace(data={
+        const.CONF_BASE_URL: "http://plex.example:32400",
+        const.CONF_SERVER_TOKEN: "token",
+        const.CONF_MACHINE_IDENTIFIER: "expected-machine",
+    })
+    client = PlexExtendedClient(Hass(), entry)
+    with pytest.raises(client_module.PlexExtendedConnectionError, match="identity"):
+        asyncio.run(client.async_connect())
+    assert client._server is None
+
+
+def test_connection_accepts_matching_server_identity(monkeypatch) -> None:
+    """A matching machine identifier must keep normal connection behaviour."""
+    class Server:
+        machineIdentifier = "expected-machine"
+
+    monkeypatch.setattr(client_module, "PlexServer", lambda *args: Server())
+
+    class Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    entry = SimpleNamespace(data={
+        const.CONF_BASE_URL: "http://plex.example:32400",
+        const.CONF_SERVER_TOKEN: "token",
+        const.CONF_MACHINE_IDENTIFIER: "expected-machine",
+    })
+    client = PlexExtendedClient(Hass(), entry)
+    asyncio.run(client.async_connect())
+    assert isinstance(client._server, Server)
