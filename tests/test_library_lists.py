@@ -405,3 +405,21 @@ def test_watchlist_cache_preserves_distinct_media_types() -> None:
     server = FakeServer(account=FakeAccount(items))
     _watchlist(_client(server), {"match_local": True, "include_summary": False})
     assert server.library.search_calls == [(same_guid, "movie"), (same_guid, "show")]
+
+
+def test_paged_contents_preserve_plexapi_query_key() -> None:
+    """Paged container reads use PlexAPI's GUID-inclusive query builder."""
+    collection = FakeCollection("Large", "10")
+    collection.key = "/library/metadata/10"
+    calls = []
+    collection._buildQueryKey = lambda key: f"{key}?includeGuids=1"
+    def fetch(key, container_start, container_size, maxresults):
+        calls.append(key)
+        return [_media("Alien", "movie", "101")]
+    collection.fetchItems = fetch
+    result = _collection_items(
+        _client(FakeServer(sections=[FakeSection(1, "Movies", [collection])])),
+        {"rating_key": "10", "limit": 2, "include_summary": False},
+    )
+    assert result["count"] == 1
+    assert calls == ["/library/metadata/10/children?includeGuids=1"]
