@@ -363,6 +363,7 @@ def _serialize_watchlist_item(
     *,
     include_summary: bool,
     match_local: bool,
+    local_match_cache: dict[tuple[str, str], list[Any]] | None = None,
 ) -> dict[str, Any]:
     """Serialize online Watchlist metadata and optional local-library matches."""
     data: dict[str, Any] = {
@@ -385,7 +386,13 @@ def _serialize_watchlist_item(
         item_type = getattr(item, "type", None)
         matches: list[Any] = []
         if guid and item_type in {"movie", "show"}:
-            matches = list(server.library.search(guid=guid, libtype=item_type))
+            identity = (str(guid), str(item_type))
+            if local_match_cache is not None and identity in local_match_cache:
+                matches = local_match_cache[identity]
+            else:
+                matches = list(server.library.search(guid=guid, libtype=item_type))
+                if local_match_cache is not None:
+                    local_match_cache[identity] = matches
         local = [
             client._serialize_item(match, include_summary=False) for match in matches
         ]
@@ -442,6 +449,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             "Reconnect Plex Extended using Connect with Plex."
         ) from err
 
+    local_match_cache: dict[tuple[str, str], list[Any]] = {}
     results = [
         _serialize_watchlist_item(
             client,
@@ -449,6 +457,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             item,
             include_summary=include_summary,
             match_local=match_local,
+            local_match_cache=local_match_cache,
         )
         for item in list(items)[:max_results]
     ]
