@@ -28,7 +28,7 @@ def _normalized_discover_guid(value: Any) -> tuple[str, str]:
 def _discover_account(client: PlexExtendedClient) -> tuple[Any, Any]:
     """Return the local server and the configured plex.tv account."""
     server = client._require_server()
-    account = server.myPlexAccount()
+    account = client._plex_account()
     return server, account
 
 
