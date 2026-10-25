@@ -9,6 +9,7 @@ from typing import Any, TypeVar
 from urllib.parse import urlencode
 
 from plexapi.exceptions import BadRequest, NotFound, Unauthorized
+from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 from requests.exceptions import RequestException
 
@@ -16,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_ACCOUNT_TOKEN,
     CONF_BASE_URL,
     CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_TOKEN,
@@ -113,6 +115,7 @@ class PlexExtendedClient:
         """Release the connected Plex server object."""
         async with self._lock:
             self._server = None
+            self.__dict__.pop("_plex_extended_account", None)
 
     async def _async_run(
         self,
@@ -141,6 +144,18 @@ class PlexExtendedClient:
             raise
         except Exception as err:
             raise PlexExtendedError(str(err)) from err
+
+    def _plex_account(self) -> Any:
+        """Use the original plex.tv login, not a shared server resource token."""
+        token = self.entry.data.get(CONF_ACCOUNT_TOKEN)
+        if token:
+            account = getattr(self, "_plex_extended_account", None)
+            if account is None:
+                account = MyPlexAccount(token=token)
+                self._plex_extended_account = account
+            return account
+        # Legacy and manual entries have only the server token.
+        return self._require_server().myPlexAccount()
 
     def _require_server(self) -> PlexServer:
         """Return the connected server."""
