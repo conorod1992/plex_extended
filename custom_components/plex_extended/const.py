@@ -24,7 +24,7 @@ HEADER_FRONTEND_BASE: Final = "HA-Frontend-Base"
 X_PLEX_DEVICE_NAME: Final = "Home Assistant"
 X_PLEX_PLATFORM: Final = "Home Assistant"
 X_PLEX_PRODUCT: Final = "Plex Extended"
-X_PLEX_VERSION: Final = "0.1.0"
+X_PLEX_VERSION: Final = "0.1.1"
 
 DEFAULT_LIMIT: Final = 10
 MAX_LIMIT: Final = 50
