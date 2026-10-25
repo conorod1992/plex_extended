@@ -29,6 +29,11 @@ def _write_manifest(root: Path, version: str) -> Path:
         "}\n",
         encoding="utf-8",
     )
+    device_path = path.parent / "const.py"
+    device_path.write_text(
+        f'from typing import Final\\nX_PLEX_VERSION: Final = "{version}"\\n',
+        encoding="utf-8",
+    )
     return path
 
 
@@ -46,6 +51,9 @@ def test_set_release_version_updates_manifest(tmp_path: Path) -> None:
 
     assert release_version.current_version(tmp_path) == "0.2.0"
     assert '"version": "0.2.0"' in manifest.read_text(encoding="utf-8")
+    assert 'X_PLEX_VERSION: Final = "0.2.0"' in (
+        manifest.parent / "const.py"
+    ).read_text(encoding="utf-8")
 
 
 def test_set_release_version_rejects_non_semver(tmp_path: Path) -> None:
@@ -68,4 +76,13 @@ def test_current_version_rejects_ambiguous_manifest(tmp_path: Path) -> None:
     )
 
     with pytest.raises(RuntimeError, match="exactly one"):
+        release_version.current_version(tmp_path)
+
+
+def test_current_version_rejects_mismatched_device_version(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, "0.1.0")
+    (manifest.parent / "const.py").write_text(
+        'X_PLEX_VERSION: Final = "0.1.1"\n', encoding="utf-8"
+    )
+    with pytest.raises(RuntimeError, match="inconsistent"):
         release_version.current_version(tmp_path)
