@@ -28,7 +28,7 @@ class PlexExtendedClient:
     pass
 
 
-def serialize_online(client, server, item, *, include_summary, match_local):
+def serialize_online(client, server, item, *, include_summary, match_local, local_match_cache=None):
     result = {
         "guid": item.guid,
         "type": item.type,
