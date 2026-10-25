@@ -394,7 +394,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
     match_local = bool(criteria.get("match_local", True))
 
     try:
-        account = server.myPlexAccount()
+        account = client._plex_account()
         items = account.watchlist(
             filter=None if filter_name == "all" else filter_name,
             sort=f"{sort_field}:{sort_order}",
