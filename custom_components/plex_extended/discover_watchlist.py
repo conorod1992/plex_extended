@@ -58,6 +58,7 @@ def _discover_search(
             providers="discover",
         )
     )[:max_results]
+    local_match_cache: dict[tuple[str, str], list[Any]] = {}
     return {
         "success": True,
         "count": len(items),
@@ -70,6 +71,7 @@ def _discover_search(
                 item,
                 include_summary=include_summary,
                 match_local=match_local,
+                local_match_cache=local_match_cache,
             )
             for item in items
         ],
