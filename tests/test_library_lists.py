@@ -185,7 +185,7 @@ def _client(server: FakeServer, default_user_id: str | None = None) -> PlexExten
     options = {}
     if default_user_id is not None:
         options[const.CONF_DEFAULT_USER_ID] = default_user_id
-    client.entry = SimpleNamespace(options=options)
+    client.entry = SimpleNamespace(options=options, data={})
     return client
 
 
