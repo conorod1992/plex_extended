@@ -311,3 +311,31 @@ def test_connection_accepts_matching_server_identity(monkeypatch) -> None:
     client = PlexExtendedClient(Hass(), entry)
     asyncio.run(client.async_connect())
     assert isinstance(client._server, Server)
+
+
+def test_plex_tv_account_uses_original_login_token_not_server_token(monkeypatch) -> None:
+    """Shared-server resource tokens must not replace the user's plex.tv login."""
+    created = []
+    class Account:
+        def __init__(self, token):
+            created.append(token)
+
+    monkeypatch.setattr(client_module, "MyPlexAccount", Account)
+    client = object.__new__(PlexExtendedClient)
+    client._server = SimpleNamespace(myPlexAccount=lambda: pytest.fail("used server token"))
+    client.entry = SimpleNamespace(data={
+        const.CONF_ACCOUNT_TOKEN: "my-plex-account-token",
+        const.CONF_SERVER_TOKEN: "shared-server-token",
+    })
+    first = client._plex_account()
+    assert first is client._plex_account()
+    assert created == ["my-plex-account-token"]
+
+
+def test_legacy_manual_plex_account_falls_back_to_server_token() -> None:
+    """Existing config entries without account_token retain legacy behaviour."""
+    account = object()
+    client = object.__new__(PlexExtendedClient)
+    client._server = SimpleNamespace(myPlexAccount=lambda: account)
+    client.entry = SimpleNamespace(data={const.CONF_SERVER_TOKEN: "legacy-token"})
+    assert client._plex_account() is account
