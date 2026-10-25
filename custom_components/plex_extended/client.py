@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_BASE_URL,
+    CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_TOKEN,
     DEFAULT_LIMIT,
     DEFAULT_SEARCH_TYPES,
@@ -80,11 +81,21 @@ class PlexExtendedClient:
         """Connect and validate the configured Plex server."""
         try:
             async with self._lock:
-                self._server = await self.hass.async_add_executor_job(
+                server = await self.hass.async_add_executor_job(
                     PlexServer,
                     self.entry.data[CONF_BASE_URL],
                     self.entry.data[CONF_SERVER_TOKEN],
                 )
+                expected_id = str(self.entry.data[CONF_MACHINE_IDENTIFIER])
+                actual_id = str(server.machineIdentifier or "")
+                if actual_id != expected_id:
+                    raise PlexExtendedConnectionError(
+                        "Connected Plex server identity does not match the configured "
+                        "server. Check the server address before retrying."
+                    )
+                self._server = server
+        except PlexExtendedConnectionError:
+            raise
         except Unauthorized as err:
             raise PlexExtendedAuthenticationError(
                 "Plex rejected the configured token"
