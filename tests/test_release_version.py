@@ -31,7 +31,7 @@ def _write_manifest(root: Path, version: str) -> Path:
     )
     device_path = path.parent / "const.py"
     device_path.write_text(
-        f'from typing import Final\\nX_PLEX_VERSION: Final = "{version}"\\n',
+        f'from typing import Final\nX_PLEX_VERSION: Final = "{version}"\n',
         encoding="utf-8",
     )
     return path
