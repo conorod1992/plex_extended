@@ -45,11 +45,16 @@ def _set_watch_state(
         )
 
     previous = _played_state(item)
-    method()
+    item_type = getattr(item, "type", None)
+    # A show's/season's aggregate watched state is not sufficient to establish
+    # the state of every child. Always execute cascading mutations.
+    changed = not (item_type not in _CASCADE_TYPES and previous is watched)
+    if changed:
+        method()
 
-    # Fetch a fresh object rather than trusting the mutated PlexAPI instance. This
-    # verifies the server accepted the state change in the selected user's context.
-    refreshed = context.server.fetchItem(rating_key)
+    # Do not repeat a scrobble for a leaf already in the requested state.
+    # Verify actual writes against a fresh server object.
+    refreshed = context.server.fetchItem(rating_key) if changed else item
     current = _played_state(refreshed)
     if current is None:
         raise PlexExtendedError(
@@ -64,6 +69,7 @@ def _set_watch_state(
     item_type = getattr(refreshed, "type", None) or getattr(item, "type", None)
     result: dict[str, Any] = {
         "success": True,
+        "changed": changed,
         "operation": "mark_watched" if watched else "mark_unwatched",
         "rating_key": rating_key,
         "type": item_type,
