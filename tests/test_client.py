@@ -10,6 +10,8 @@ from types import ModuleType, SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from plexapi.exceptions import Unauthorized, NotFound
+from requests.exceptions import ConnectionError
 
 
 ROOT = Path(__file__).parents[1]
@@ -339,3 +341,23 @@ def test_legacy_manual_plex_account_falls_back_to_server_token() -> None:
     client._server = SimpleNamespace(myPlexAccount=lambda: account)
     client.entry = SimpleNamespace(data={const.CONF_SERVER_TOKEN: "legacy-token"})
     assert client._plex_account() is account
+
+
+@pytest.mark.parametrize("failure", [Unauthorized("expired"), ConnectionError("offline")])
+def test_search_technical_enrichment_preserves_auth_and_network_errors(failure) -> None:
+    server = FakeServer(search_results=[_item("Alien", "movie", "11")])
+    def fail(*args):
+        raise failure
+    server.fetchItem = fail
+    with pytest.raises(type(failure)):
+        _client(server)._search("Alien", ["movie"], 10, None, False, True)
+
+
+def test_search_technical_enrichment_allows_missing_optional_item() -> None:
+    server = FakeServer(search_results=[_item("Alien", "movie", "11")])
+    def not_found(*args):
+        raise NotFound("missing details")
+    server.fetchItem = not_found
+    result = _client(server)._search("Alien", ["movie"], 10, None, False, True)
+    assert result["count"] == 1
+    assert result["results"][0]["title"] == "Alien"
