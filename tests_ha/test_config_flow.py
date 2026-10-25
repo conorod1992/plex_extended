@@ -253,3 +253,68 @@ async def test_options_flow_uses_loaded_runtime_client(
     assert result["data"][CONF_ALLOW_LLM_MUTATIONS] is True
     assert result["data"][CONF_ALLOW_LLM_PLAYLIST_MUTATIONS] is True
     validate_user.assert_awaited_once_with(entry.runtime_data, "7")
+
+
+async def test_manual_reauthentication_preserves_server_identity(
+    hass: HomeAssistant,
+    entry_factory,
+    mock_connect,
+) -> None:
+    """Manual-token setups can renew credentials without changing Plex servers."""
+    entry = entry_factory(token="old-token")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+        data=entry.data,
+    )
+    assert result["type"] is FlowResultType.MENU
+    with patch(
+        "custom_components.plex_extended.config_flow._connect_manual",
+        return_value=_server_data(token="renewed-token"),
+    ):
+        form = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={"next_step_id": "manual_setup"}
+        )
+        assert form["type"] is FlowResultType.FORM
+        assert form["step_id"] == "manual_setup"
+        assert form["data_schema"].schema
+        finished = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_BASE_URL: "http://plex-a.example:32400",
+                CONF_TOKEN: "renewed-token",
+            },
+        )
+    assert finished["type"] is FlowResultType.ABORT
+    assert finished["reason"] == "reauth_successful"
+    assert entry.data[CONF_SERVER_TOKEN] == "renewed-token"
+    assert CONF_ACCOUNT_TOKEN not in entry.data
+
+
+async def test_manual_reauthentication_rejects_different_server(
+    hass: HomeAssistant,
+    entry_factory,
+) -> None:
+    entry = entry_factory(token="old-token")
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+        data=entry.data,
+    )
+    with patch(
+        "custom_components.plex_extended.config_flow._connect_manual",
+        return_value=_server_data(token="other-token", machine_identifier="other-machine"),
+    ):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={"next_step_id": "manual_setup"}
+        )
+        finished = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={
+                CONF_BASE_URL: "http://plex-a.example:32400",
+                CONF_TOKEN: "other-token",
+            },
+        )
+    assert finished["type"] is FlowResultType.ABORT
+    assert finished["reason"] == "reauth_server_missing"
+    assert entry.data[CONF_SERVER_TOKEN] == "old-token"
