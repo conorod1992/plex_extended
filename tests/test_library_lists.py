@@ -370,3 +370,38 @@ def test_playlist_content_paging_fills_filtered_results_across_pages() -> None:
     )
     assert [item["title"] for item in result["results"]] == ["Alien", "Aliens"]
     assert calls == [("/playlists/30/items", 0), ("/playlists/30/items", 25)]
+
+
+def test_watchlist_reuses_guid_search_within_request_but_not_across_calls() -> None:
+    """Duplicate Discover GUIDs should not cause duplicate Plex library searches."""
+    first = SimpleNamespace(title="Alien", type="movie", year=1979,
+                            guid="plex://movie/alien", watchlistedAt=None)
+    duplicate = SimpleNamespace(title="Alien duplicate", type="movie", year=1979,
+                                guid="plex://movie/alien", watchlistedAt=None)
+    server = FakeServer(account=FakeAccount([first, duplicate]))
+    server.library.local_matches[("plex://movie/alien", "movie")] = [
+        _media("Alien", "movie", "1234")
+    ]
+    client = _client(server)
+    first_response = _watchlist(client, {"match_local": True, "include_summary": False})
+    assert first_response["count"] == 2
+    assert all(item["on_server"] for item in first_response["results"])
+    assert server.library.search_calls == [("plex://movie/alien", "movie")]
+
+    _watchlist(client, {"match_local": True, "include_summary": False})
+    assert server.library.search_calls == [
+        ("plex://movie/alien", "movie"),
+        ("plex://movie/alien", "movie"),
+    ]
+
+
+def test_watchlist_cache_preserves_distinct_media_types() -> None:
+    """Cache keys must contain type as well as GUID."""
+    same_guid = "plex://movie/example"
+    items = [
+        SimpleNamespace(title="Film", type="movie", guid=same_guid),
+        SimpleNamespace(title="Show", type="show", guid=same_guid),
+    ]
+    server = FakeServer(account=FakeAccount(items))
+    _watchlist(_client(server), {"match_local": True, "include_summary": False})
+    assert server.library.search_calls == [(same_guid, "movie"), (same_guid, "show")]
