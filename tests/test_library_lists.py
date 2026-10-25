@@ -331,3 +331,42 @@ def test_watchlist_passes_filter_sort_and_media_type_to_plex() -> None:
             "maxresults": 5,
         }
     ]
+
+
+def test_collection_contents_stop_after_first_page_without_loading_every_item() -> None:
+    """Unfiltered requests should not eagerly download huge collections."""
+    calls = []
+    collection = FakeCollection("Large", "10")
+    collection.key = "/library/collections/10"
+    def fetch(key, container_start, container_size, maxresults):
+        calls.append((key, container_start, container_size, maxresults))
+        return [_media(f"Movie {i}", "movie", str(i + 1)) for i in range(25)]
+    collection.fetchItems = fetch
+    result = _collection_items(
+        _client(FakeServer(sections=[FakeSection(1, "Movies", [collection])])),
+        {"rating_key": "10", "limit": 3, "include_summary": False},
+    )
+    assert result["count"] == 3
+    assert len(calls) == 1
+    assert calls[0][0] == "/library/collections/10/children"
+
+
+def test_playlist_content_paging_fills_filtered_results_across_pages() -> None:
+    """Filtering must continue beyond a page dominated by other media types."""
+    calls = []
+    playlist = FakePlaylist("Large", "30")
+    playlist.key = "/playlists/30"
+    def fetch(key, container_start, container_size, maxresults):
+        calls.append((key, container_start))
+        if container_start == 0:
+            return [_media(f"Episode {i}", "episode", str(i + 1)) for i in range(25)]
+        if container_start == 25:
+            return [_media("Alien", "movie", "100"), _media("Aliens", "movie", "101")]
+        return []
+    playlist.fetchItems = fetch
+    result = _playlist_items(
+        _client(FakeServer(playlists=[playlist])),
+        {"rating_key": "30", "media_types": ["movie"], "limit": 2, "include_summary": False},
+    )
+    assert [item["title"] for item in result["results"]] == ["Alien", "Aliens"]
+    assert calls == [("/playlists/30/items", 0), ("/playlists/30/items", 25)]
