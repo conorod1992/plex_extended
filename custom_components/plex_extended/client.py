@@ -360,7 +360,11 @@ class PlexExtendedClient:
             if include_technical:
                 try:
                     match = target_server.fetchItem(rating_key)
-                except Exception:
+                except (Unauthorized, RequestException):
+                    raise
+                except (BadRequest, NotFound):
+                    # Technical enrichment is optional when Plex cannot retrieve
+                    # an individual item's details.
                     pass
 
             results.append(
