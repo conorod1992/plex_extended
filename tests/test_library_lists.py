@@ -441,3 +441,37 @@ def test_pagination_rejects_repeated_full_page_instead_of_looping_forever() -> N
              "include_summary": False},
         )
     assert offsets == [0, 25]
+
+
+def test_real_plexapi_playlist_paged_filter_then_server_failure() -> None:
+    """Integration paging helper operates on actual PlexAPI Playlist objects."""
+    from requests.exceptions import HTTPError
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        # A filtered read must cross PlexAPI's HTTP/XML boundary, return only
+        # requested items, and avoid downloading the entire 60-item playlist.
+        first = lists_module._limited_contents(playlist, "/items", {"movie"}, 3)
+        assert [item.title for item in first] == ["Movie 0", "Movie 1", "Movie 2"]
+        calls = [r for r in handler.requests_seen if r[0] == "/playlists/9/items"]
+        assert len(calls) == 1
+        handler.fail_requests = True
+        with pytest.raises(HTTPError):
+            lists_module._limited_contents(playlist, "/items", {"movie"}, 3)
+        handler.fail_requests = False
+        recovered = lists_module._limited_contents(playlist, "/items", {"movie"}, 2)
+        assert [item.title for item in recovered] == ["Movie 0", "Movie 1"]
+
+
+def test_real_plexapi_integration_paging_stops_on_ignored_offsets() -> None:
+    """Broken offsets must be detected after two real HTTP page responses."""
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        handler.ignore_offset = True
+        with pytest.raises(PlexExtendedError, match="did not advance"):
+            lists_module._limited_contents(playlist, "/items", {"episode"}, 2)
+        calls = [r for r in handler.requests_seen if r[0] == "/playlists/9/items"]
+        assert len(calls) == 2
