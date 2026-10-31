@@ -213,6 +213,7 @@ def _limited_contents(container: Any, suffix: str, media_types: set[str], limit:
     results: list[Any] = []
     offset = 0
     page_size = max(25, limit)
+    previous_page_keys: tuple[str, ...] | None = None
     while len(results) < limit:
         page = list(fetch(
             endpoint,
@@ -220,6 +221,14 @@ def _limited_contents(container: Any, suffix: str, media_types: set[str], limit:
             container_size=page_size,
             maxresults=page_size,
         ))
+        # A broken/ignored container offset could otherwise repeatedly fetch
+        # the same full page indefinitely when filters exclude those items.
+        page_keys = tuple(str(getattr(item, "ratingKey", "")) for item in page)
+        if page_keys and page_keys == previous_page_keys and len(page) == page_size:
+            raise PlexExtendedError(
+                "Plex did not advance the paginated collection or playlist results"
+            )
+        previous_page_keys = page_keys
         for item in page:
             if not media_types or str(getattr(item, "type", "")) in media_types:
                 results.append(item)
