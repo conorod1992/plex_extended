@@ -13,12 +13,15 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from plexapi.server import PlexServer
+from plexapi.exceptions import Unauthorized
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
     requests_seen = []
     ignore_offset = False
     fail_requests = False
+    reject_next_items_request = False
+    items_request_count = 0
 
     def log_message(self, *args):
         pass
@@ -30,6 +33,13 @@ class FixtureHandler(BaseHTTPRequestHandler):
             self.send_response(503)
             self.end_headers()
             return
+        if url.path == "/playlists/9/items":
+            type(self).items_request_count += 1
+            if self.reject_next_items_request:
+                type(self).reject_next_items_request = False
+                self.send_response(401)
+                self.end_headers()
+                return
         if url.path == "/":
             payload = (
                 '<MediaContainer size="0" friendlyName="Fixture PMS" '
@@ -74,6 +84,8 @@ def fixture_server():
         requests_seen = []
         ignore_offset = False
         fail_requests = False
+        reject_next_items_request = False
+        items_request_count = 0
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = Thread(target=server.serve_forever, daemon=True)
@@ -117,3 +129,34 @@ def test_real_plexapi_playlist_items_match_fixture_pagination():
         assert len(results) == 60
         assert results[0].title == "Movie 0"
         assert results[-1].title == "Movie 59"
+
+
+def test_real_plexapi_recovers_after_transient_unauthorized():
+    """A rejected request must not permanently poison a PlexAPI session."""
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        handler.reject_next_items_request = True
+        with pytest.raises(Unauthorized):
+            playlist.fetchItems("/playlists/9/items", container_start=0, container_size=2)
+        recovered = playlist.fetchItems(
+            "/playlists/9/items", container_start=2, container_size=2
+        )
+        assert [item.title for item in recovered] == ["Movie 2", "Movie 3"]
+        assert handler.items_request_count == 2
+
+
+def test_real_plexapi_repeated_pages_expose_ignored_offsets():
+    """Exercise a broken server via real PlexAPI rather than a fake fetchItems."""
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        handler.ignore_offset = True
+        first = playlist.fetchItems(
+            "/playlists/9/items", container_start=0, container_size=3
+        )
+        second = playlist.fetchItems(
+            "/playlists/9/items", container_start=3, container_size=3
+        )
+        assert [x.ratingKey for x in first] == [x.ratingKey for x in second]
+        requests = [x for x in handler.requests_seen if x[0] == "/playlists/9/items"]
+        assert requests[-2][2]["X-Plex-Container-Start"] == "0"
+        assert requests[-1][2]["X-Plex-Container-Start"] == "3"
