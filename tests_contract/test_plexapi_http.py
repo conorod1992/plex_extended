@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from plexapi.server import PlexServer
-from plexapi.exceptions import Unauthorized
+from plexapi.exceptions import BadRequest, Unauthorized
 
 
 class FixtureHandler(BaseHTTPRequestHandler):
@@ -22,6 +22,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
     fail_requests = False
     reject_next_items_request = False
     items_request_count = 0
+    mixed_items = False
+    duplicate_media = False
+    radio = False
 
     def log_message(self, *args):
         pass
@@ -45,21 +48,38 @@ class FixtureHandler(BaseHTTPRequestHandler):
                 '<MediaContainer size="0" friendlyName="Fixture PMS" '
                 'machineIdentifier="fixture-machine" version="1.41.0" />'
             )
-        elif url.path == "/playlists":
+        elif url.path in {"/playlists", "/playlists/9"}:
             payload = (
                 '<MediaContainer size="1">'
                 '<Playlist ratingKey="9" key="/playlists/9" title="Test" '
-                'playlistType="video" type="playlist" leafCount="60" />'
+                f'playlistType="video" type="playlist" leafCount="60" radio="{int(self.radio)}" />'
                 '</MediaContainer>'
             )
-        elif url.path == "/playlists/9/items":
+        elif url.path == "/library/metadata/8":
+            payload = (
+                '<MediaContainer size="1"><Directory type="collection" '
+                'ratingKey="8" key="/library/metadata/8" title="Test" '
+                'subtype="movie" childCount="60" /></MediaContainer>'
+            )
+        elif url.path.startswith("/library/metadata/") and url.path.rsplit("/", 1)[1].isdigit():
+            rating_key = int(url.path.rsplit("/", 1)[1])
+            payload = (
+                '<MediaContainer size="1">'
+                f'<Video type="movie" title="Movie {rating_key - 100}" '
+                f'ratingKey="{rating_key}" key="{url.path}" />'
+                '</MediaContainer>'
+            )
+        elif url.path in {"/playlists/9/items", "/library/metadata/8/children"}:
             start = int(self.headers.get("X-Plex-Container-Start", "0"))
             size = int(self.headers.get("X-Plex-Container-Size", "25"))
             if self.ignore_offset:
                 start = 0
             items = [
-                f'<Video type="movie" title="Movie {n}" ratingKey="{100+n}" '
-                f'key="/library/metadata/{100+n}" />'
+                f'<Video type="{"episode" if self.mixed_items and n < 50 else "movie"}" '
+                f'title="Movie {0 if self.duplicate_media and n < 50 else n}" '
+                f'ratingKey="{100 if self.duplicate_media and n < 50 else 100+n}" '
+                + (f'playlistItemID="{n+1}" ' if url.path == "/playlists/9/items" else "")
+                + f'key="/library/metadata/{100 if self.duplicate_media and n < 50 else 100+n}" />'
                 for n in range(start, min(start + size, 60))
             ]
             payload = (
@@ -118,7 +138,7 @@ def test_real_plexapi_playlist_fetch_uses_container_headers():
 def test_real_plexapi_rejects_http_server_failure():
     with fixture_server() as (handler, server):
         handler.fail_requests = True
-        with pytest.raises(Exception):
+        with pytest.raises(BadRequest, match="503"):
             server.playlists()
 
 
@@ -137,9 +157,9 @@ def test_real_plexapi_recovers_after_transient_unauthorized():
         playlist = server.playlists()[0]
         handler.reject_next_items_request = True
         with pytest.raises(Unauthorized):
-            playlist.fetchItems("/playlists/9/items", container_start=0, container_size=2)
+            playlist.fetchItems("/playlists/9/items", container_start=0, container_size=2, maxresults=2)
         recovered = playlist.fetchItems(
-            "/playlists/9/items", container_start=2, container_size=2
+            "/playlists/9/items", container_start=2, container_size=2, maxresults=2
         )
         assert [item.title for item in recovered] == ["Movie 2", "Movie 3"]
         assert handler.items_request_count == 2
@@ -151,10 +171,10 @@ def test_real_plexapi_repeated_pages_expose_ignored_offsets():
         playlist = server.playlists()[0]
         handler.ignore_offset = True
         first = playlist.fetchItems(
-            "/playlists/9/items", container_start=0, container_size=3
+            "/playlists/9/items", container_start=0, container_size=3, maxresults=3
         )
         second = playlist.fetchItems(
-            "/playlists/9/items", container_start=3, container_size=3
+            "/playlists/9/items", container_start=3, container_size=3, maxresults=3
         )
         assert [x.ratingKey for x in first] == [x.ratingKey for x in second]
         requests = [x for x in handler.requests_seen if x[0] == "/playlists/9/items"]

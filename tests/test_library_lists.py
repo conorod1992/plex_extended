@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -445,7 +447,7 @@ def test_pagination_rejects_repeated_full_page_instead_of_looping_forever() -> N
 
 def test_real_plexapi_playlist_paged_filter_then_server_failure() -> None:
     """Integration paging helper operates on actual PlexAPI Playlist objects."""
-    from requests.exceptions import HTTPError
+    from plexapi.exceptions import BadRequest
     from tests_contract.test_plexapi_http import fixture_server
 
     with fixture_server() as (handler, server):
@@ -457,7 +459,7 @@ def test_real_plexapi_playlist_paged_filter_then_server_failure() -> None:
         calls = [r for r in handler.requests_seen if r[0] == "/playlists/9/items"]
         assert len(calls) == 1
         handler.fail_requests = True
-        with pytest.raises(HTTPError):
+        with pytest.raises(BadRequest, match="503"):
             lists_module._limited_contents(playlist, "/items", {"movie"}, 3)
         handler.fail_requests = False
         recovered = lists_module._limited_contents(playlist, "/items", {"movie"}, 2)
@@ -475,3 +477,73 @@ def test_real_plexapi_integration_paging_stops_on_ignored_offsets() -> None:
             lists_module._limited_contents(playlist, "/items", {"episode"}, 2)
         calls = [r for r in handler.requests_seen if r[0] == "/playlists/9/items"]
         assert len(calls) == 2
+
+
+@pytest.mark.parametrize("collection", [False, True])
+def test_real_plexapi_filtered_contents_cross_pages(collection) -> None:
+    """Production paging preserves query parameters and filters past two pages."""
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        handler.mixed_items = True
+        container = server.fetchItem(8) if collection else server.playlists()[0]
+        suffix = "/children" if collection else "/items"
+        endpoint = f"{container.key}{suffix}"
+        results = lists_module._limited_contents(container, suffix, {"movie"}, 2)
+        assert [item.title for item in results] == ["Movie 50", "Movie 51"]
+        calls = [r for r in handler.requests_seen if r[0] == endpoint]
+        assert [r[2]["X-Plex-Container-Start"] for r in calls] == ["0", "25", "50"]
+        assert all(r[2]["X-Plex-Container-Size"] == "25" for r in calls)
+        assert all(r[1]["includeGuids"] == ["1"] for r in calls)
+        # Examining page identity must not hydrate every partial media object.
+        assert len(handler.requests_seen) == 5
+
+
+def test_real_plexapi_playlist_duplicate_media_are_distinct_entries() -> None:
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        handler.mixed_items = True
+        handler.duplicate_media = True
+        playlist = server.playlists()[0]
+        results = lists_module._limited_contents(playlist, "/items", {"movie"}, 2)
+        assert [item.title for item in results] == ["Movie 50", "Movie 51"]
+        assert handler.items_request_count == 3
+
+
+def test_real_plexapi_radio_playlist_retains_empty_items_behaviour() -> None:
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        handler.radio = True
+        playlist = server.playlists()[0]
+        assert playlist.items() == []
+        assert lists_module._limited_contents(playlist, "/items", set(), 2) == []
+        assert handler.items_request_count == 0
+
+
+def test_real_plexapi_playlist_unauthorized_requests_reauth_then_recovers() -> None:
+    """The production action wrapper translates a real 401 and requests HA reauth."""
+    from tests_contract.test_plexapi_http import fixture_server
+
+    class Hass:
+        async def async_add_executor_job(self, func, *args):
+            return await asyncio.to_thread(func, *args)
+
+    with fixture_server() as (handler, server):
+        client = _client(server)
+        client.hass = Hass()
+        client._lock = asyncio.Lock()
+        client.entry.async_start_reauth = Mock()
+        criteria = {"rating_key": "9", "limit": 2, "include_summary": False}
+
+        async def sequence():
+            handler.reject_next_items_request = True
+            with pytest.raises(client_module.PlexExtendedAuthenticationError):
+                await client._async_run(_playlist_items, client, criteria)
+            client.entry.async_start_reauth.assert_called_once_with(client.hass)
+            recovered = await client._async_run(_playlist_items, client, criteria)
+            assert [item["title"] for item in recovered["results"]] == ["Movie 0", "Movie 1"]
+            assert handler.items_request_count == 2
+
+        asyncio.run(sequence())

@@ -194,6 +194,9 @@ def _limited_contents(container: Any, suffix: str, media_types: set[str], limit:
     the same endpoint through fetchItems() with bounded pagination instead.
     A missing key/fetchItems on test doubles keeps their simple items() contract.
     """
+    if suffix == "/items" and getattr(container, "radio", False):
+        # PlexAPI returns no contents for radio playlists.
+        return []
     key = getattr(container, "key", None)
     fetch = getattr(container, "fetchItems", None)
     if not key or not callable(fetch):
@@ -223,7 +226,13 @@ def _limited_contents(container: Any, suffix: str, media_types: set[str], limit:
         ))
         # A broken/ignored container offset could otherwise repeatedly fetch
         # the same full page indefinitely when filters exclude those items.
-        page_keys = tuple(str(getattr(item, "ratingKey", "")) for item in page)
+        # A playlist may contain the same media repeatedly. Its entry IDs, not
+        # the media rating keys, distinguish advancing pages in that case.
+        # Read optional IDs without triggering PlexAPI's lazy metadata reload.
+        page_keys = tuple(
+            str(vars(item).get("playlistItemID") or getattr(item, "ratingKey", ""))
+            for item in page
+        )
         if page_keys and page_keys == previous_page_keys and len(page) == page_size:
             raise PlexExtendedError(
                 "Plex did not advance the paginated collection or playlist results"
