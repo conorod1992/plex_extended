@@ -264,3 +264,18 @@ def test_cascading_mutation_is_not_skipped_by_parent_state(watched: bool) -> Non
     assert result["changed"] is True
     assert item.mark_watched_calls + item.mark_unwatched_calls == 1
     assert result["scope"] == "item_and_children"
+
+
+def test_watch_state_sequence_updates_then_skips_duplicate_writes() -> None:
+    """A user's watch/unwatch sequence must preserve both state and idempotence."""
+    server = FakeServer()
+    item = FakeItem("42", "Alien", "movie", False)
+    server.items["42"] = item
+    client = _client(server)
+    assert _set_watch_state(client, {"rating_key": "42"}, watched=True)["changed"] is True
+    assert _set_watch_state(client, {"rating_key": "42"}, watched=True)["changed"] is False
+    assert _set_watch_state(client, {"rating_key": "42"}, watched=False)["changed"] is True
+    assert _set_watch_state(client, {"rating_key": "42"}, watched=False)["changed"] is False
+    assert item.mark_watched_calls == 1
+    assert item.mark_unwatched_calls == 1
+    assert item.isPlayed is False
