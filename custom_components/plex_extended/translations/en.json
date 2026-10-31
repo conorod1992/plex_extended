@@ -27,7 +27,11 @@
       },
       "reauth_confirm": {
         "title": "Reconnect Plex",
-        "description": "Plex Extended can no longer authenticate. Continue to reconnect this server with Plex."
+        "description": "Plex Extended can no longer authenticate. Choose how to reconnect this server.",
+        "menu_options": {
+          "website_auth": "Connect with Plex",
+          "manual_setup": "Enter server URL and token manually"
+        }
       }
     },
     "error": {

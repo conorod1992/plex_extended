@@ -413,3 +413,14 @@ def test_technical_filter_forces_materialized_summary_count() -> None:
     assert result["count"] == 2
     assert server.query_calls == []
     assert section.search_calls[0]["media__videoCodec__in"] == ["hevc"]
+
+
+def test_hydration_deduplicates_rating_keys_without_dropping_result_rows() -> None:
+    """Repeated keys need only one Plex metadata fetch, retaining query row count."""
+    server = FakeServer([])
+    full = _full_item("42", year=1979, genres=["Horror"], resolutions=["4k"])
+    server.full_items["42"] = full
+    rows = [_partial("42"), _partial("42")]
+    hydrated = summary_module._hydrate_items(server, rows)
+    assert server.fetch_batches == [[42]]
+    assert hydrated == [full, full]

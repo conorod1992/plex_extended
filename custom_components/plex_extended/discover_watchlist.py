@@ -28,7 +28,7 @@ def _normalized_discover_guid(value: Any) -> tuple[str, str]:
 def _discover_account(client: PlexExtendedClient) -> tuple[Any, Any]:
     """Return the local server and the configured plex.tv account."""
     server = client._require_server()
-    account = server.myPlexAccount()
+    account = client._plex_account()
     return server, account
 
 
@@ -58,6 +58,7 @@ def _discover_search(
             providers="discover",
         )
     )[:max_results]
+    local_match_cache: dict[tuple[str, str], list[Any]] = {}
     return {
         "success": True,
         "count": len(items),
@@ -70,6 +71,7 @@ def _discover_search(
                 item,
                 include_summary=include_summary,
                 match_local=match_local,
+                local_match_cache=local_match_cache,
             )
             for item in items
         ],

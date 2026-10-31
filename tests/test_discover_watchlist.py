@@ -28,7 +28,7 @@ class PlexExtendedClient:
     pass
 
 
-def serialize_online(client, server, item, *, include_summary, match_local):
+def serialize_online(client, server, item, *, include_summary, match_local, local_match_cache=None):
     result = {
         "guid": item.guid,
         "type": item.type,
@@ -125,6 +125,9 @@ class FakeClient:
 
     def _require_server(self):
         return self.server
+
+    def _plex_account(self):
+        return self.server.myPlexAccount()
 
     @staticmethod
     def _normalize_limit(value):

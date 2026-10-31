@@ -280,24 +280,10 @@ def _recently_added(
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    # Preserve the exact existing Plex recently-added path when no new filtering
-    # behavior is requested.
-    if (
-        window.since is None
-        and window.before is None
-        and grouping == "none"
-    ):
-        result = client._recently_added(
-            max_results,
-            criteria.get("library"),
-            criteria.get("media_types"),
-            include_summary,
-            criteria.get("library_id"),
-            context.server,
-        )
-        result.update(context.response_fields())
-        return result
-
+    # Use the same per-section media-type selection for windowed and unwindowed
+    # requests. The legacy recentlyAdded() fast path filtered *after* Plex had
+    # already applied a section-default type and result limit, dropping episodes
+    # and tracks (and sometimes returning too few results).
     selected_section = client._section(
         criteria.get("library"),
         criteria.get("library_id"),

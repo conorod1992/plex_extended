@@ -37,8 +37,14 @@ SPECS = (
         r'(^  "version": ")[^"]+("[,]?$)',
         re.MULTILINE,
     ),
+    VersionSpec(
+        "Plex OAuth device version",
+        "custom_components/plex_extended/const.py",
+        r'^X_PLEX_VERSION: Final = "([^"]+)"$',
+        r'(^X_PLEX_VERSION: Final = ")[^"]+("$)',
+        re.MULTILINE,
+    ),
 )
-
 
 def _match_once(root: Path, spec: VersionSpec) -> tuple[str, str]:
     path = root / spec.path

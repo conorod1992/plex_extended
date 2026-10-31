@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -185,7 +187,7 @@ def _client(server: FakeServer, default_user_id: str | None = None) -> PlexExten
     options = {}
     if default_user_id is not None:
         options[const.CONF_DEFAULT_USER_ID] = default_user_id
-    client.entry = SimpleNamespace(options=options)
+    client.entry = SimpleNamespace(options=options, data={})
     return client
 
 
@@ -331,3 +333,217 @@ def test_watchlist_passes_filter_sort_and_media_type_to_plex() -> None:
             "maxresults": 5,
         }
     ]
+
+
+def test_collection_contents_stop_after_first_page_without_loading_every_item() -> None:
+    """Unfiltered requests should not eagerly download huge collections."""
+    calls = []
+    collection = FakeCollection("Large", "10")
+    collection.key = "/library/collections/10"
+    def fetch(key, container_start, container_size, maxresults):
+        calls.append((key, container_start, container_size, maxresults))
+        return [_media(f"Movie {i}", "movie", str(i + 1)) for i in range(25)]
+    collection.fetchItems = fetch
+    result = _collection_items(
+        _client(FakeServer(sections=[FakeSection(1, "Movies", [collection])])),
+        {"rating_key": "10", "limit": 3, "include_summary": False},
+    )
+    assert result["count"] == 3
+    assert len(calls) == 1
+    assert calls[0][0] == "/library/collections/10/children"
+
+
+def test_playlist_content_paging_fills_filtered_results_across_pages() -> None:
+    """Filtering must continue beyond a page dominated by other media types."""
+    calls = []
+    playlist = FakePlaylist("Large", "30")
+    playlist.key = "/playlists/30"
+    def fetch(key, container_start, container_size, maxresults):
+        calls.append((key, container_start))
+        if container_start == 0:
+            return [_media(f"Episode {i}", "episode", str(i + 1)) for i in range(25)]
+        if container_start == 25:
+            return [_media("Alien", "movie", "100"), _media("Aliens", "movie", "101")]
+        return []
+    playlist.fetchItems = fetch
+    result = _playlist_items(
+        _client(FakeServer(playlists=[playlist])),
+        {"rating_key": "30", "media_types": ["movie"], "limit": 2, "include_summary": False},
+    )
+    assert [item["title"] for item in result["results"]] == ["Alien", "Aliens"]
+    assert calls == [("/playlists/30/items", 0), ("/playlists/30/items", 25)]
+
+
+def test_watchlist_reuses_guid_search_within_request_but_not_across_calls() -> None:
+    """Duplicate Discover GUIDs should not cause duplicate Plex library searches."""
+    first = SimpleNamespace(title="Alien", type="movie", year=1979,
+                            guid="plex://movie/alien", watchlistedAt=None)
+    duplicate = SimpleNamespace(title="Alien duplicate", type="movie", year=1979,
+                                guid="plex://movie/alien", watchlistedAt=None)
+    server = FakeServer(account=FakeAccount([first, duplicate]))
+    server.library.local_matches[("plex://movie/alien", "movie")] = [
+        _media("Alien", "movie", "1234")
+    ]
+    client = _client(server)
+    first_response = _watchlist(client, {"match_local": True, "include_summary": False})
+    assert first_response["count"] == 2
+    assert all(item["on_server"] for item in first_response["results"])
+    assert server.library.search_calls == [("plex://movie/alien", "movie")]
+
+    _watchlist(client, {"match_local": True, "include_summary": False})
+    assert server.library.search_calls == [
+        ("plex://movie/alien", "movie"),
+        ("plex://movie/alien", "movie"),
+    ]
+
+
+def test_watchlist_cache_preserves_distinct_media_types() -> None:
+    """Cache keys must contain type as well as GUID."""
+    same_guid = "plex://movie/example"
+    items = [
+        SimpleNamespace(title="Film", type="movie", guid=same_guid),
+        SimpleNamespace(title="Show", type="show", guid=same_guid),
+    ]
+    server = FakeServer(account=FakeAccount(items))
+    _watchlist(_client(server), {"match_local": True, "include_summary": False})
+    assert server.library.search_calls == [(same_guid, "movie"), (same_guid, "show")]
+
+
+def test_paged_contents_preserve_plexapi_query_key() -> None:
+    """Paged container reads use PlexAPI's GUID-inclusive query builder."""
+    collection = FakeCollection("Large", "10")
+    collection.key = "/library/metadata/10"
+    calls = []
+    collection._buildQueryKey = lambda key: f"{key}?includeGuids=1"
+    def fetch(key, container_start, container_size, maxresults):
+        calls.append(key)
+        return [_media("Alien", "movie", "101")]
+    collection.fetchItems = fetch
+    result = _collection_items(
+        _client(FakeServer(sections=[FakeSection(1, "Movies", [collection])])),
+        {"rating_key": "10", "limit": 2, "include_summary": False},
+    )
+    assert result["count"] == 1
+    assert calls == ["/library/metadata/10/children?includeGuids=1"]
+
+
+def test_pagination_rejects_repeated_full_page_instead_of_looping_forever() -> None:
+    """Misbehaving Plex container paging must fail rather than hang a service call."""
+    playlist = FakePlaylist("Broken pagination", "31")
+    playlist.key = "/playlists/31"
+    offsets = []
+    def fetch(key, container_start, container_size, maxresults):
+        offsets.append(container_start)
+        return [_media(f"Episode {i}", "episode", str(i)) for i in range(container_size)]
+    playlist.fetchItems = fetch
+    with pytest.raises(PlexExtendedError, match="did not advance"):
+        _playlist_items(
+            _client(FakeServer(playlists=[playlist])),
+            {"rating_key": "31", "limit": 2, "media_types": ["movie"],
+             "include_summary": False},
+        )
+    assert offsets == [0, 25]
+
+
+def test_real_plexapi_playlist_paged_filter_then_server_failure() -> None:
+    """Integration paging helper operates on actual PlexAPI Playlist objects."""
+    from plexapi.exceptions import BadRequest
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        # A filtered read must cross PlexAPI's HTTP/XML boundary, return only
+        # requested items, and avoid downloading the entire 60-item playlist.
+        first = lists_module._limited_contents(playlist, "/items", {"movie"}, 3)
+        assert [item.title for item in first] == ["Movie 0", "Movie 1", "Movie 2"]
+        calls = [r for r in handler.requests_seen if r[0] == "/playlists/9/items"]
+        assert len(calls) == 1
+        handler.fail_requests = True
+        with pytest.raises(BadRequest, match="503"):
+            lists_module._limited_contents(playlist, "/items", {"movie"}, 3)
+        handler.fail_requests = False
+        recovered = lists_module._limited_contents(playlist, "/items", {"movie"}, 2)
+        assert [item.title for item in recovered] == ["Movie 0", "Movie 1"]
+
+
+def test_real_plexapi_integration_paging_stops_on_ignored_offsets() -> None:
+    """Broken offsets must be detected after two real HTTP page responses."""
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        handler.ignore_offset = True
+        with pytest.raises(PlexExtendedError, match="did not advance"):
+            lists_module._limited_contents(playlist, "/items", {"episode"}, 2)
+        calls = [r for r in handler.requests_seen if r[0] == "/playlists/9/items"]
+        assert len(calls) == 2
+
+
+@pytest.mark.parametrize("collection", [False, True])
+def test_real_plexapi_filtered_contents_cross_pages(collection) -> None:
+    """Production paging preserves query parameters and filters past two pages."""
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        handler.mixed_items = True
+        container = server.fetchItem(8) if collection else server.playlists()[0]
+        suffix = "/children" if collection else "/items"
+        endpoint = f"{container.key}{suffix}"
+        results = lists_module._limited_contents(container, suffix, {"movie"}, 2)
+        assert [item.title for item in results] == ["Movie 50", "Movie 51"]
+        calls = [r for r in handler.requests_seen if r[0] == endpoint]
+        assert [r[2]["X-Plex-Container-Start"] for r in calls] == ["0", "25", "50"]
+        assert all(r[2]["X-Plex-Container-Size"] == "25" for r in calls)
+        assert all(r[1]["includeGuids"] == ["1"] for r in calls)
+        # Examining page identity must not hydrate every partial media object.
+        assert len(handler.requests_seen) == 5
+
+
+def test_real_plexapi_playlist_duplicate_media_are_distinct_entries() -> None:
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        handler.mixed_items = True
+        handler.duplicate_media = True
+        playlist = server.playlists()[0]
+        results = lists_module._limited_contents(playlist, "/items", {"movie"}, 2)
+        assert [item.title for item in results] == ["Movie 50", "Movie 51"]
+        assert handler.items_request_count == 3
+
+
+def test_real_plexapi_radio_playlist_retains_empty_items_behaviour() -> None:
+    from tests_contract.test_plexapi_http import fixture_server
+
+    with fixture_server() as (handler, server):
+        handler.radio = True
+        playlist = server.playlists()[0]
+        assert playlist.items() == []
+        assert lists_module._limited_contents(playlist, "/items", set(), 2) == []
+        assert handler.items_request_count == 0
+
+
+def test_real_plexapi_playlist_unauthorized_requests_reauth_then_recovers() -> None:
+    """The production action wrapper translates a real 401 and requests HA reauth."""
+    from tests_contract.test_plexapi_http import fixture_server
+
+    class Hass:
+        async def async_add_executor_job(self, func, *args):
+            return await asyncio.to_thread(func, *args)
+
+    with fixture_server() as (handler, server):
+        client = _client(server)
+        client.hass = Hass()
+        client._lock = asyncio.Lock()
+        client.entry.async_start_reauth = Mock()
+        criteria = {"rating_key": "9", "limit": 2, "include_summary": False}
+
+        async def sequence():
+            handler.reject_next_items_request = True
+            with pytest.raises(client_module.PlexExtendedAuthenticationError):
+                await client._async_run(_playlist_items, client, criteria)
+            client.entry.async_start_reauth.assert_called_once_with(client.hass)
+            recovered = await client._async_run(_playlist_items, client, criteria)
+            assert [item["title"] for item in recovered["results"]] == ["Movie 0", "Movie 1"]
+            assert handler.items_request_count == 2
+
+        asyncio.run(sequence())

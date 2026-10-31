@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import importlib.util
+import asyncio
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from plexapi.exceptions import Unauthorized, NotFound
+from requests.exceptions import ConnectionError
 
 
 ROOT = Path(__file__).parents[1]
@@ -267,3 +270,94 @@ def test_history_accepts_stable_library_and_user_ids() -> None:
 def test_llm_summaries_default_off() -> None:
     """LLM list/search responses should default to compact payloads."""
     assert const.DEFAULT_LLM_INCLUDE_SUMMARY is False
+
+
+def test_connection_rejects_wrong_server_identity(monkeypatch) -> None:
+    """A valid token must never silently connect this entry to another server."""
+    class Server:
+        machineIdentifier = "different-machine"
+
+    monkeypatch.setattr(client_module, "PlexServer", lambda *args: Server())
+
+    class Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    entry = SimpleNamespace(data={
+        const.CONF_BASE_URL: "http://plex.example:32400",
+        const.CONF_SERVER_TOKEN: "token",
+        const.CONF_MACHINE_IDENTIFIER: "expected-machine",
+    })
+    client = PlexExtendedClient(Hass(), entry)
+    with pytest.raises(client_module.PlexExtendedConnectionError, match="identity"):
+        asyncio.run(client.async_connect())
+    assert client._server is None
+
+
+def test_connection_accepts_matching_server_identity(monkeypatch) -> None:
+    """A matching machine identifier must keep normal connection behaviour."""
+    class Server:
+        machineIdentifier = "expected-machine"
+
+    monkeypatch.setattr(client_module, "PlexServer", lambda *args: Server())
+
+    class Hass:
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    entry = SimpleNamespace(data={
+        const.CONF_BASE_URL: "http://plex.example:32400",
+        const.CONF_SERVER_TOKEN: "token",
+        const.CONF_MACHINE_IDENTIFIER: "expected-machine",
+    })
+    client = PlexExtendedClient(Hass(), entry)
+    asyncio.run(client.async_connect())
+    assert isinstance(client._server, Server)
+
+
+def test_plex_tv_account_uses_original_login_token_not_server_token(monkeypatch) -> None:
+    """Shared-server resource tokens must not replace the user's plex.tv login."""
+    created = []
+    class Account:
+        def __init__(self, token):
+            created.append(token)
+
+    monkeypatch.setattr(client_module, "MyPlexAccount", Account)
+    client = object.__new__(PlexExtendedClient)
+    client._server = SimpleNamespace(myPlexAccount=lambda: pytest.fail("used server token"))
+    client.entry = SimpleNamespace(data={
+        const.CONF_ACCOUNT_TOKEN: "my-plex-account-token",
+        const.CONF_SERVER_TOKEN: "shared-server-token",
+    })
+    first = client._plex_account()
+    assert first is client._plex_account()
+    assert created == ["my-plex-account-token"]
+
+
+def test_legacy_manual_plex_account_falls_back_to_server_token() -> None:
+    """Existing config entries without account_token retain legacy behaviour."""
+    account = object()
+    client = object.__new__(PlexExtendedClient)
+    client._server = SimpleNamespace(myPlexAccount=lambda: account)
+    client.entry = SimpleNamespace(data={const.CONF_SERVER_TOKEN: "legacy-token"})
+    assert client._plex_account() is account
+
+
+@pytest.mark.parametrize("failure", [Unauthorized("expired"), ConnectionError("offline")])
+def test_search_technical_enrichment_preserves_auth_and_network_errors(failure) -> None:
+    server = FakeServer(search_results=[_item("Alien", "movie", "11")])
+    def fail(*args):
+        raise failure
+    server.fetchItem = fail
+    with pytest.raises(type(failure)):
+        _client(server)._search("Alien", ["movie"], 10, None, False, True)
+
+
+def test_search_technical_enrichment_allows_missing_optional_item() -> None:
+    server = FakeServer(search_results=[_item("Alien", "movie", "11")])
+    def not_found(*args):
+        raise NotFound("missing details")
+    server.fetchItem = not_found
+    result = _client(server)._search("Alien", ["movie"], 10, None, False, True)
+    assert result["count"] == 1
+    assert result["results"][0]["title"] == "Alien"

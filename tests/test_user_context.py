@@ -88,8 +88,11 @@ class FakeSection:
     def onDeck(self):
         return list(self._on_deck)
 
-    def recentlyAdded(self, maxresults=None):
-        items = list(self._recent)
+    def recentlyAdded(self, maxresults=None, libtype=None):
+        items = [
+            item for item in self._recent
+            if (libtype or self.type) == item.type
+        ]
         return items[:maxresults] if maxresults is not None else items
 
 
@@ -310,7 +313,11 @@ def test_search_watched_state_comes_from_default_user_context() -> None:
 def test_recently_added_watch_state_comes_from_default_user_context() -> None:
     """Global recent-add order can still return personalized watch metadata."""
     owner, conor, _ = _household_servers()
-    conor.library._recent = [_item("New Film", media_type="movie", view_count=1)]
+    conor.library._sections = [FakeSection(key="2", title="Movies")]
+    conor.library._sections[0].type = "movie"
+    conor.library._sections[0]._recent = [
+        _item("New Film", media_type="movie", view_count=1)
+    ]
     client = _client(owner, "7")
 
     result = _recently_added_for_context(

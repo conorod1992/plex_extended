@@ -9,6 +9,7 @@ from typing import Any, TypeVar
 from urllib.parse import urlencode
 
 from plexapi.exceptions import BadRequest, NotFound, Unauthorized
+from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 from requests.exceptions import RequestException
 
@@ -16,7 +17,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_ACCOUNT_TOKEN,
     CONF_BASE_URL,
+    CONF_MACHINE_IDENTIFIER,
     CONF_SERVER_TOKEN,
     DEFAULT_LIMIT,
     DEFAULT_SEARCH_TYPES,
@@ -80,11 +83,21 @@ class PlexExtendedClient:
         """Connect and validate the configured Plex server."""
         try:
             async with self._lock:
-                self._server = await self.hass.async_add_executor_job(
+                server = await self.hass.async_add_executor_job(
                     PlexServer,
                     self.entry.data[CONF_BASE_URL],
                     self.entry.data[CONF_SERVER_TOKEN],
                 )
+                expected_id = str(self.entry.data[CONF_MACHINE_IDENTIFIER])
+                actual_id = str(server.machineIdentifier or "")
+                if actual_id != expected_id:
+                    raise PlexExtendedConnectionError(
+                        "Connected Plex server identity does not match the configured "
+                        "server. Check the server address before retrying."
+                    )
+                self._server = server
+        except PlexExtendedConnectionError:
+            raise
         except Unauthorized as err:
             raise PlexExtendedAuthenticationError(
                 "Plex rejected the configured token"
@@ -102,6 +115,7 @@ class PlexExtendedClient:
         """Release the connected Plex server object."""
         async with self._lock:
             self._server = None
+            self.__dict__.pop("_plex_extended_account", None)
 
     async def _async_run(
         self,
@@ -130,6 +144,18 @@ class PlexExtendedClient:
             raise
         except Exception as err:
             raise PlexExtendedError(str(err)) from err
+
+    def _plex_account(self) -> Any:
+        """Use the original plex.tv login, not a shared server resource token."""
+        token = self.entry.data.get(CONF_ACCOUNT_TOKEN)
+        if token:
+            account = getattr(self, "_plex_extended_account", None)
+            if account is None:
+                account = MyPlexAccount(token=token)
+                self._plex_extended_account = account
+            return account
+        # Legacy and manual entries have only the server token.
+        return self._require_server().myPlexAccount()
 
     def _require_server(self) -> PlexServer:
         """Return the connected server."""
@@ -334,7 +360,11 @@ class PlexExtendedClient:
             if include_technical:
                 try:
                     match = target_server.fetchItem(rating_key)
-                except Exception:
+                except (Unauthorized, RequestException):
+                    raise
+                except (BadRequest, NotFound):
+                    # Technical enrichment is optional when Plex cannot retrieve
+                    # an individual item's details.
                     pass
 
             results.append(

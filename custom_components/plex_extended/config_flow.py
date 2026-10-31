@@ -32,6 +32,7 @@ from .const import (
     CONF_ALLOW_LLM_MUTATIONS,
     CONF_ALLOW_LLM_WATCHLIST_MUTATIONS,
     CONF_ALLOW_LLM_PLAYLIST_MUTATIONS,
+    CONF_ACCOUNT_TOKEN,
     CONF_BASE_URL,
     CONF_CLIENT_ID,
     CONF_DEFAULT_USER_ID,
@@ -238,6 +239,8 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
 
         if self._client_id:
             data[CONF_CLIENT_ID] = self._client_id
+        if self._account_token:
+            data[CONF_ACCOUNT_TOKEN] = self._account_token
         return await self._async_create_or_update(data)
 
     async def async_step_manual_setup(
@@ -259,11 +262,21 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
             else:
                 return await self._async_create_or_update(data)
 
+        existing_url = (
+            self._reauth_entry.data.get(CONF_BASE_URL)
+            if self._reauth_entry is not None
+            else None
+        )
+        url_field = (
+            vol.Required(CONF_BASE_URL, default=existing_url)
+            if existing_url
+            else vol.Required(CONF_BASE_URL)
+        )
         return self.async_show_form(
             step_id="manual_setup",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_BASE_URL): cv.url,
+                    url_field: cv.url,
                     vol.Required(CONF_TOKEN): str,
                 }
             ),
@@ -278,6 +291,8 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(machine_identifier)
 
         if self._reauth_entry is not None:
+            if machine_identifier != self._target_machine_identifier:
+                return self.async_abort(reason="reauth_server_missing")
             return self.async_update_reload_and_abort(
                 self._reauth_entry,
                 data=data,
@@ -302,11 +317,9 @@ class PlexExtendedConfigFlow(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Ask the user to reconnect their Plex account."""
-        if user_input is not None:
-            return await self._async_start_plex_auth()
-        return self.async_show_form(
+        return self.async_show_menu(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({}),
+            menu_options=["website_auth", "manual_setup"],
         )
 
 

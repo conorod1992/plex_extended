@@ -7,7 +7,7 @@ from typing import Any
 from plexapi.exceptions import Unauthorized
 
 from .client import PlexExtendedClient, PlexExtendedError
-from .const import DEFAULT_LIMIT
+from .const import CONF_ACCOUNT_TOKEN, DEFAULT_LIMIT
 from .user_context import resolve_user_context
 
 _COLLECTION_TYPES = {"movie", "show", "artist", "album"}
@@ -187,6 +187,68 @@ async def async_list_collections(
     return await client._async_run(_list_collections, client, dict(criteria))
 
 
+def _limited_contents(container: Any, suffix: str, media_types: set[str], limit: int) -> list[Any]:
+    """Read only enough Plex container pages to fill a requested result limit.
+
+    PlexAPI's items() eagerly retrieves the entire collection or playlist. Use
+    the same endpoint through fetchItems() with bounded pagination instead.
+    A missing key/fetchItems on test doubles keeps their simple items() contract.
+    """
+    if suffix == "/items" and getattr(container, "radio", False):
+        # PlexAPI returns no contents for radio playlists.
+        return []
+    key = getattr(container, "key", None)
+    fetch = getattr(container, "fetchItems", None)
+    if not key or not callable(fetch):
+        items = list(container.items())
+        return [
+            item for item in items
+            if not media_types or str(getattr(item, "type", "")) in media_types
+        ][:limit]
+
+    # Match PlexAPI Collection.items()/Playlist.items(): their query builder
+    # requests GUIDs and preserves other supported endpoint parameters.
+    build_key = getattr(container, "_buildQueryKey", None)
+    endpoint = f"{key}{suffix}"
+    if callable(build_key):
+        endpoint = build_key(endpoint)
+
+    results: list[Any] = []
+    offset = 0
+    page_size = max(25, limit)
+    previous_page_keys: tuple[str, ...] | None = None
+    while len(results) < limit:
+        page = list(fetch(
+            endpoint,
+            container_start=offset,
+            container_size=page_size,
+            maxresults=page_size,
+        ))
+        # A broken/ignored container offset could otherwise repeatedly fetch
+        # the same full page indefinitely when filters exclude those items.
+        # A playlist may contain the same media repeatedly. Its entry IDs, not
+        # the media rating keys, distinguish advancing pages in that case.
+        # Read optional IDs without triggering PlexAPI's lazy metadata reload.
+        page_keys = tuple(
+            str(vars(item).get("playlistItemID") or getattr(item, "ratingKey", ""))
+            for item in page
+        )
+        if page_keys and page_keys == previous_page_keys and len(page) == page_size:
+            raise PlexExtendedError(
+                "Plex did not advance the paginated collection or playlist results"
+            )
+        previous_page_keys = page_keys
+        for item in page:
+            if not media_types or str(getattr(item, "type", "")) in media_types:
+                results.append(item)
+                if len(results) >= limit:
+                    break
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return results
+
+
 def _collection_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str, Any]:
     """Return items in one Plex collection."""
     context = resolve_user_context(
@@ -197,10 +259,7 @@ def _collection_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> d
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    items = list(collection.items())
-    if media_types:
-        items = [item for item in items if str(getattr(item, "type", "")) in media_types]
-    items = items[:max_results]
+    items = _limited_contents(collection, "/children", media_types, max_results)
 
     result: dict[str, Any] = {
         "success": True,
@@ -302,10 +361,7 @@ def _playlist_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> dic
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    items = list(playlist.items())
-    if media_types:
-        items = [item for item in items if str(getattr(item, "type", "")) in media_types]
-    items = items[:max_results]
+    items = _limited_contents(playlist, "/items", media_types, max_results)
     result: dict[str, Any] = {
         "success": True,
         "playlist": _serialize_playlist(playlist, include_summary=False),
@@ -332,6 +388,7 @@ def _serialize_watchlist_item(
     *,
     include_summary: bool,
     match_local: bool,
+    local_match_cache: dict[tuple[str, str], list[Any]] | None = None,
 ) -> dict[str, Any]:
     """Serialize online Watchlist metadata and optional local-library matches."""
     data: dict[str, Any] = {
@@ -354,7 +411,13 @@ def _serialize_watchlist_item(
         item_type = getattr(item, "type", None)
         matches: list[Any] = []
         if guid and item_type in {"movie", "show"}:
-            matches = list(server.library.search(guid=guid, libtype=item_type))
+            identity = (str(guid), str(item_type))
+            if local_match_cache is not None and identity in local_match_cache:
+                matches = local_match_cache[identity]
+            else:
+                matches = list(server.library.search(guid=guid, libtype=item_type))
+                if local_match_cache is not None:
+                    local_match_cache[identity] = matches
         local = [
             client._serialize_item(match, include_summary=False) for match in matches
         ]
@@ -394,7 +457,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
     match_local = bool(criteria.get("match_local", True))
 
     try:
-        account = server.myPlexAccount()
+        account = client._plex_account()
         items = account.watchlist(
             filter=None if filter_name == "all" else filter_name,
             sort=f"{sort_field}:{sort_order}",
@@ -402,11 +465,16 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             maxresults=max_results,
         )
     except Unauthorized as err:
+        if client.entry.data.get(CONF_ACCOUNT_TOKEN):
+            # An original plex.tv login was explicitly stored; let the central
+            # wrapper initiate reauthentication when Plex rejects that token.
+            raise
         raise PlexExtendedError(
             "Plex Watchlist requires a token that can authenticate with plex.tv. "
             "Reconnect Plex Extended using Connect with Plex."
         ) from err
 
+    local_match_cache: dict[tuple[str, str], list[Any]] = {}
     results = [
         _serialize_watchlist_item(
             client,
@@ -414,6 +482,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             item,
             include_summary=include_summary,
             match_local=match_local,
+            local_match_cache=local_match_cache,
         )
         for item in list(items)[:max_results]
     ]

@@ -121,10 +121,14 @@ def _hydrate_items(server: Any, items: list[Any]) -> list[Any]:
     in bounded batches.
     """
     numeric_keys: list[int] = []
+    seen_keys: set[int] = set()
     for item in items:
         key = _rating_key(item)
         if key is not None and key.isdigit():
-            numeric_keys.append(int(key))
+            numeric_key = int(key)
+            if numeric_key not in seen_keys:
+                seen_keys.add(numeric_key)
+                numeric_keys.append(numeric_key)
 
     hydrated_by_key: dict[str, Any] = {}
     for start in range(0, len(numeric_keys), _DETAIL_BATCH_SIZE):
