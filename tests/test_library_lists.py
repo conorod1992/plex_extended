@@ -423,3 +423,21 @@ def test_paged_contents_preserve_plexapi_query_key() -> None:
     )
     assert result["count"] == 1
     assert calls == ["/library/metadata/10/children?includeGuids=1"]
+
+
+def test_pagination_rejects_repeated_full_page_instead_of_looping_forever() -> None:
+    """Misbehaving Plex container paging must fail rather than hang a service call."""
+    playlist = FakePlaylist("Broken pagination", "31")
+    playlist.key = "/playlists/31"
+    offsets = []
+    def fetch(key, container_start, container_size, maxresults):
+        offsets.append(container_start)
+        return [_media(f"Episode {i}", "episode", str(i)) for i in range(container_size)]
+    playlist.fetchItems = fetch
+    with pytest.raises(PlexExtendedError, match="did not advance"):
+        _playlist_items(
+            _client(FakeServer(playlists=[playlist])),
+            {"rating_key": "31", "limit": 2, "media_types": ["movie"],
+             "include_summary": False},
+        )
+    assert offsets == [0, 25]
