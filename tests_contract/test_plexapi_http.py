@@ -1,0 +1,119 @@
+"""Real PlexAPI + local HTTP server contract tests (no Plex account or secrets).
+
+The tests deliberately instantiate the installed PlexAPI classes rather than
+substituting fake Collection/Playlist objects. They exercise HTTP transport,
+XML parsing, container pagination and failure handling together.
+"""
+from __future__ import annotations
+
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+from plexapi.server import PlexServer
+
+
+class FixtureHandler(BaseHTTPRequestHandler):
+    requests_seen = []
+    ignore_offset = False
+    fail_requests = False
+
+    def log_message(self, *args):
+        pass
+
+    def do_GET(self):
+        url = urlsplit(self.path)
+        self.requests_seen.append((url.path, parse_qs(url.query), dict(self.headers)))
+        if self.fail_requests:
+            self.send_response(503)
+            self.end_headers()
+            return
+        if url.path == "/":
+            payload = (
+                '<MediaContainer size="0" friendlyName="Fixture PMS" '
+                'machineIdentifier="fixture-machine" version="1.41.0" />'
+            )
+        elif url.path == "/playlists":
+            payload = (
+                '<MediaContainer size="1">'
+                '<Playlist ratingKey="9" key="/playlists/9" title="Test" '
+                'playlistType="video" type="playlist" leafCount="60" />'
+                '</MediaContainer>'
+            )
+        elif url.path == "/playlists/9/items":
+            start = int(self.headers.get("X-Plex-Container-Start", "0"))
+            size = int(self.headers.get("X-Plex-Container-Size", "25"))
+            if self.ignore_offset:
+                start = 0
+            items = [
+                f'<Video type="movie" title="Movie {n}" ratingKey="{100+n}" '
+                f'key="/library/metadata/{100+n}" />'
+                for n in range(start, min(start + size, 60))
+            ]
+            payload = (
+                f'<MediaContainer size="{len(items)}" totalSize="60">'
+                + "".join(items) + "</MediaContainer>"
+            )
+        else:
+            self.send_response(404)
+            self.end_headers()
+            return
+        raw = payload.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/xml")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+
+@contextmanager
+def fixture_server():
+    class Handler(FixtureHandler):
+        requests_seen = []
+        ignore_offset = False
+        fail_requests = False
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield Handler, PlexServer(f"http://127.0.0.1:{server.server_port}", "fixture-token")
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+def test_real_plexapi_playlist_fetch_uses_container_headers():
+    with fixture_server() as (handler, server):
+        playlist = server.playlists()[0]
+        items = playlist.fetchItems(
+            "/playlists/9/items",
+            container_start=25,
+            container_size=10,
+            maxresults=10,
+        )
+        assert [item.title for item in items] == [f"Movie {n}" for n in range(25, 35)]
+        calls = [entry for entry in handler.requests_seen if entry[0] == "/playlists/9/items"]
+        assert calls
+        headers = calls[-1][2]
+        assert headers["X-Plex-Container-Start"] == "25"
+        assert headers["X-Plex-Container-Size"] == "10"
+
+
+def test_real_plexapi_rejects_http_server_failure():
+    with fixture_server() as (handler, server):
+        handler.fail_requests = True
+        with pytest.raises(Exception):
+            server.playlists()
+
+
+def test_real_plexapi_playlist_items_match_fixture_pagination():
+    with fixture_server() as (_, server):
+        playlist = server.playlists()[0]
+        results = playlist.items()
+        assert len(results) == 60
+        assert results[0].title == "Movie 0"
+        assert results[-1].title == "Movie 59"
