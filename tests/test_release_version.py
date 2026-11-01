@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -86,3 +88,28 @@ def test_current_version_rejects_mismatched_device_version(tmp_path: Path) -> No
     )
     with pytest.raises(RuntimeError, match="inconsistent"):
         release_version.current_version(tmp_path)
+
+
+def test_release_workflow_stages_every_updated_version_file(tmp_path: Path) -> None:
+    """The release commit must include every version change made by the script."""
+    def git(*args: str) -> str:
+        return subprocess.check_output(
+            ["git", "-c", "core.autocrlf=false", *args],
+            cwd=tmp_path,
+            text=True,
+        ).strip()
+
+    _write_manifest(tmp_path, "0.1.0")
+    git("init", "--quiet")
+    git("add", ".")
+    baseline_tree = git("write-tree")
+    release_version.set_release_version("0.2.0", tmp_path)
+
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    commands = [line.strip() for line in workflow.splitlines() if line.strip().startswith("git add ")]
+    assert commands
+    for command in commands:
+        git(*shlex.split(command)[1:])
+
+    staged_paths = set(git("diff", "--cached", "--name-only", baseline_tree).splitlines())
+    assert staged_paths == {spec.path for spec in release_version.SPECS}

@@ -126,7 +126,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add custom_components/plex_extended/manifest.json
+          git add custom_components/plex_extended/manifest.json custom_components/plex_extended/const.py
 
           if git diff --cached --quiet; then
             echo "No version commit required; publishing the already-staged initial version."
