@@ -84,3 +84,6 @@ The model is instructed to resolve exact Plex identifiers with read tools before
 LLM list/query tools use tighter default/result bounds than manual Home Assistant actions to keep responses token-efficient. Broad query tools omit summaries by default where appropriate.
 
 Potentially mutating tools remain bounded and use the same backend verification rules as their manual Home Assistant equivalents.
+## Phase 1 read-only response enhancements
+
+The existing `plex_extended__watch_status` tool includes known time remaining and counts of episodes with missing duration data. `plex_extended__active_streams` includes summary counts over all matching sessions, not just the limited returned list. `plex_extended__media_details` accepts optional `include_streams: true` for stream and edition metadata, while defaulting this richer payload off. `plex_extended__query_library`, collection/playlist browse tools, and `plex_extended__watchlist` now expose `results_truncated` where a complete versus limited result can be determined. These features add no new tools or mutation permissions.

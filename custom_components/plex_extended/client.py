@@ -216,27 +216,69 @@ class PlexExtendedClient:
         """Clamp result counts to a safe range."""
         return max(1, min(int(limit or DEFAULT_LIMIT), MAX_LIMIT))
 
-    def _serialize_technical(self, item: Any) -> list[dict[str, Any]]:
-        """Serialize non-sensitive technical media data."""
+    def _serialize_technical(
+        self, item: Any, *, include_streams: bool = False
+    ) -> list[dict[str, Any]]:
+        """Serialize non-sensitive media versions and optionally their streams."""
         result: list[dict[str, Any]] = []
         for media in getattr(item, "media", []) or []:
-            result.append(
-                {
-                    key: value
-                    for key, value in {
-                        "container": getattr(media, "container", None),
-                        "bitrate": getattr(media, "bitrate", None),
-                        "video_resolution": getattr(media, "videoResolution", None),
-                        "video_codec": getattr(media, "videoCodec", None),
-                        "audio_codec": getattr(media, "audioCodec", None),
-                        "width": getattr(media, "width", None),
-                        "height": getattr(media, "height", None),
-                        "video_frame_rate": getattr(media, "videoFrameRate", None),
-                        "audio_channels": getattr(media, "audioChannels", None),
-                    }.items()
-                    if value is not None
-                }
-            )
+            media_data = {
+                key: value
+                for key, value in {
+                    "container": getattr(media, "container", None),
+                    "bitrate": getattr(media, "bitrate", None),
+                    "video_resolution": getattr(media, "videoResolution", None),
+                    "video_codec": getattr(media, "videoCodec", None),
+                    "audio_codec": getattr(media, "audioCodec", None),
+                    "width": getattr(media, "width", None),
+                    "height": getattr(media, "height", None),
+                    "video_frame_rate": getattr(media, "videoFrameRate", None),
+                    "audio_channels": getattr(media, "audioChannels", None),
+                }.items()
+                if value is not None
+            }
+            if include_streams:
+                parts: list[dict[str, Any]] = []
+                for part in getattr(media, "parts", []) or []:
+                    streams: list[dict[str, Any]] = []
+                    for stream in getattr(part, "streams", []) or []:
+                        kind = getattr(stream, "streamType", None)
+                        try:
+                            kind = int(kind)
+                        except (TypeError, ValueError):
+                            continue
+                        if kind not in (1, 2, 3):
+                            continue
+                        values = {
+                            "type": {1: "video", 2: "audio", 3: "subtitle"}[kind],
+                            "codec": getattr(stream, "codec", None),
+                            "language": getattr(stream, "language", None),
+                            "language_code": getattr(stream, "languageCode", None),
+                            "title": getattr(stream, "title", None),
+                            "display_title": getattr(stream, "displayTitle", None),
+                            "selected": getattr(stream, "selected", None),
+                            "default": getattr(stream, "default", None),
+                            "forced": getattr(stream, "forced", None),
+                            "channels": getattr(stream, "channels", None) if kind == 2 else None,
+                            "channel_layout": (
+                                getattr(stream, "audioChannelLayout", None)
+                                if kind == 2 else None
+                            ),
+                            "bitrate": getattr(stream, "bitrate", None),
+                            "bit_depth": getattr(stream, "bitDepth", None),
+                            "sampling_rate": (
+                                getattr(stream, "samplingRate", None)
+                                if kind == 2 else None
+                            ),
+                        }
+                        streams.append({
+                            key: value for key, value in values.items()
+                            if value is not None
+                        })
+                    # Deliberately omit Plex part IDs, keys, URLs and filesystem paths.
+                    parts.append({"streams": streams})
+                media_data["parts"] = parts
+            result.append(media_data)
         return result
 
     def _serialize_item(
@@ -245,6 +287,7 @@ class PlexExtendedClient:
         *,
         include_summary: bool = True,
         include_technical: bool = False,
+        include_streams: bool = False,
         users: dict[int, str] | None = None,
     ) -> dict[str, Any]:
         """Convert a Plex media/history object to compact JSON-safe data."""
@@ -303,8 +346,12 @@ class PlexExtendedClient:
         }
         if include_summary:
             data["summary"] = getattr(item, "summary", None)
-        if include_technical:
-            data["media"] = self._serialize_technical(item)
+        if include_technical or include_streams:
+            data["media"] = self._serialize_technical(item, include_streams=include_streams)
+        if include_streams:
+            edition = getattr(item, "editionTitle", None)
+            if edition:
+                data["edition"] = str(edition)
         return {
             key: value
             for key, value in data.items()
@@ -680,6 +727,7 @@ class PlexExtendedClient:
         rating_key: str,
         include_technical: bool,
         server: PlexServer | None = None,
+        include_streams: bool = False,
     ) -> dict[str, Any]:
         """Return details for a Plex rating key."""
         target_server = server or self._require_server()
@@ -690,17 +738,21 @@ class PlexExtendedClient:
                 item,
                 include_summary=True,
                 include_technical=include_technical,
+                include_streams=include_streams,
             ),
         }
 
     async def async_media_details(
-        self, rating_key: str, include_technical: bool = True
+        self, rating_key: str, include_technical: bool = True,
+        include_streams: bool = False,
     ) -> dict[str, Any]:
         """Return details for a Plex item."""
         return await self._async_run(
             self._media_details,
             rating_key,
             include_technical,
+            None,
+            include_streams,
         )
 
     def _list_libraries(self) -> dict[str, Any]:

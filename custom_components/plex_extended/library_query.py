@@ -295,14 +295,14 @@ def _query_library(
     filters, post_filters = _build_filters(criteria)
     sort = _build_sort(criteria)
 
-    items = section.search(
+    items = list(section.search(
         title=criteria.get("title") or None,
         sort=sort,
-        maxresults=max_results,
+        maxresults=max_results + 1,
         libtype=media_type,
         filters=filters or None,
         **post_filters,
-    )
+    ))
 
     include_summary = bool(criteria.get("include_summary", True))
     include_technical = bool(criteria.get("include_technical", False))
@@ -314,12 +314,13 @@ def _query_library(
             include_summary=include_summary,
             include_technical=include_technical,
         )
-        for item in list(items)[:max_results]
+        for item in items[:max_results]
     ]
 
     result: dict[str, Any] = {
         "success": True,
         "count": len(results),
+        "results_truncated": len(items) > max_results,
         "library": str(section.title),
         "library_id": str(section.key),
         "media_type": media_type,

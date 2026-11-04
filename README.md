@@ -26,11 +26,11 @@ It does **not** replace or modify Home Assistant's built-in Plex integration. Bo
 - structured filtering by genre, year, runtime, ratings, watched state, resolution/HDR, codecs, audio/subtitle languages, labels and more;
 - exact counts and facet summaries without returning huge item lists;
 - Plex-native related/similar local media;
-- item metadata and technical details.
+- item metadata and technical details, including optional per-stream audio/subtitle and edition information.
 
 ### Understand viewing state
 
-- episode-level progress for a TV show;
+- episode-level progress for a TV show, including known viewing time remaining and missing-duration counts;
 - next episode and in-progress episode;
 - cross-show TV catch-up lists;
 - Continue Watching and On Deck;
@@ -62,7 +62,8 @@ Potentially mutating **Assist** tools are separately opt-in and disabled by defa
 - Plex user and media progress;
 - local/remote/relay state;
 - direct play, direct stream or transcode classification;
-- source quality and session bandwidth metadata.
+- source quality and session bandwidth metadata;
+- an aggregate session/transcode summary across all matching streams.
 
 Plex Extended does not provide playback control.
 
@@ -147,6 +148,8 @@ response_variable: plex_results
 You can then use `plex_results` later in the script or automation.
 
 You do **not** need to create Plex sensors containing enormous lists of media. Returning data only when an action is called is one of Plex Extended's main design goals.
+
+Bounded library, collection, playlist, and Watchlist responses include explicit truncation indicators when there are more matching results than the requested limit.
 
 ## Which action should I use?
 

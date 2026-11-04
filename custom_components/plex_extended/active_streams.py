@@ -184,6 +184,49 @@ def _serialize_active_session(item: Any) -> dict[str, Any]:
     )
 
 
+def _session_summary(items: list[Any]) -> dict[str, int]:
+    """Aggregate all matching sessions, including those outside the result limit."""
+    result = {
+        "playing": 0,
+        "paused": 0,
+        "buffering": 0,
+        "other_states": 0,
+        "direct_playing": 0,
+        "direct_streaming": 0,
+        "transcoding": 0,
+        "unknown_delivery": 0,
+        "hardware_transcoding": 0,
+        "local_sessions": 0,
+        "remote_sessions": 0,
+        "unknown_locality": 0,
+    }
+    for item in items:
+        player = getattr(item, "player", None)
+        state = str(getattr(player, "state", "") or "").casefold()
+        result[state if state in ("playing", "paused", "buffering") else "other_states"] += 1
+
+        transcode = getattr(item, "transcodeSession", None)
+        delivery = _delivery(transcode)
+        decision = delivery["decision"]
+        delivery_field = {
+            "direct_play": "direct_playing",
+            "direct_stream": "direct_streaming",
+            "transcode": "transcoding",
+            "unknown": "unknown_delivery",
+        }[decision]
+        result[delivery_field] += 1
+        if decision == "transcode" and delivery.get("hardware_transcoding"):
+            result["hardware_transcoding"] += 1
+
+        local = getattr(player, "local", None)
+        result[
+            "local_sessions" if local is True
+            else "remote_sessions" if local is False
+            else "unknown_locality"
+        ] += 1
+    return result
+
+
 def _active_streams(
     client: PlexExtendedClient,
     criteria: dict[str, Any],
@@ -221,6 +264,7 @@ def _active_streams(
         "count": len(visible),
         "matching_sessions": len(filtered),
         "total_sessions": len(sessions),
+        "summary": _session_summary(filtered),
         "truncated": len(visible) < len(filtered),
         "results": [_serialize_active_session(item) for item in visible],
     }

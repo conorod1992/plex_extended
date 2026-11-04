@@ -707,7 +707,7 @@ library_summary:
         boolean:
 watch_status:
   name: TV watch status
-  description: Return episode-level viewing progress for one Plex TV show, including completion, last watched episode, current progress and the next episode to watch.
+  description: Return episode-level viewing progress for one Plex TV show, including remaining known viewing time, completion, current progress and the next episode to watch.
   fields:
     config_entry_id:
       name: Plex server
@@ -1168,7 +1168,7 @@ on_deck:
 
 media_details:
   name: Media details
-  description: Return detailed metadata for a Plex item by rating key, including viewing state for the selected/default Plex user.
+  description: Return detailed metadata for a Plex item by rating key, optionally including individual audio, video and subtitle streams.
   fields:
     config_entry_id:
       name: Plex server
@@ -1196,11 +1196,17 @@ media_details:
       default: true
       selector:
         boolean:
+    include_streams:
+      name: Include media streams and edition
+      description: Return per-part video/audio/subtitle stream details and edition metadata. Implies media details; may require Plex metadata loading.
+      default: false
+      selector:
+        boolean:
 
 
 active_streams:
   name: Active streams
-  description: Return current Plex playback sessions including user, media, player, progress, location, source quality and delivery details.
+  description: Return current Plex playback sessions and an aggregate summary of every matching session, including those outside the result limit.
   fields:
     config_entry_id:
       name: Plex server

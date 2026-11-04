@@ -325,3 +325,21 @@ def test_query_explicit_library_must_match_media_type() -> None:
             client,
             {"media_type": "movie", "library_id": "2", "limit": 10},
         )
+
+
+
+def test_query_library_uses_one_extra_match_for_truthful_truncation() -> None:
+    section = FakeSection("1", "Movies", "movie")
+    section.search_results = [
+        _item("Alien", "1"), _item("Aliens", "2"), _item("Alien 3", "3")
+    ]
+    client = _client(FakeServer([section]))
+    from custom_components.plex_extended.library_query import _query_library
+
+    result = _query_library(client, {
+        "media_type": "movie", "limit": 2, "include_summary": False
+    })
+
+    assert result["count"] == 2
+    assert result["results_truncated"] is True
+    assert section.search_calls[0]["maxresults"] == 3

@@ -361,3 +361,40 @@ def test_search_technical_enrichment_allows_missing_optional_item() -> None:
     result = _client(server)._search("Alien", ["movie"], 10, None, False, True)
     assert result["count"] == 1
     assert result["results"][0]["title"] == "Alien"
+
+
+
+def test_opt_in_stream_details_include_flags_without_private_part_metadata() -> None:
+    """Detailed media stream results must never expose paths, keys or stream IDs."""
+    stream = SimpleNamespace(
+        streamType=3, codec="srt", language="English", languageCode="eng",
+        selected=False, default=False, forced=True, title="English Forced",
+        id=999, key="/private/subtitle/key", file="/private/alien.srt",
+    )
+    audio = SimpleNamespace(
+        streamType=2, codec="truehd", languageCode="eng", channels=8,
+        audioChannelLayout="7.1", default=True, forced=False,
+        file="/private/audio.mka",
+    )
+    part = SimpleNamespace(
+        streams=[stream, audio], file="/private/alien.mkv", key="/private/part",
+        id=555,
+    )
+    media = SimpleNamespace(parts=[part], container="mkv", videoResolution="4k")
+    item = SimpleNamespace(
+        ratingKey="1", type="movie", title="Alien", viewCount=0, duration=1000,
+        viewOffset=0, media=[media], editionTitle="Director's Cut",
+    )
+    client = _client(FakeServer())
+    basic = client._serialize_item(item, include_summary=False, include_technical=True)
+    detailed = client._serialize_item(item, include_summary=False, include_streams=True)
+
+    assert "parts" not in basic["media"][0]
+    assert "edition" not in basic
+    assert detailed["edition"] == "Director's Cut"
+    assert detailed["media"][0]["parts"][0]["streams"][0]["forced"] is True
+    assert detailed["media"][0]["parts"][0]["streams"][0]["selected"] is False
+    assert detailed["media"][0]["parts"][0]["streams"][1]["channel_layout"] == "7.1"
+    serialized = repr(detailed)
+    for private in ("/private", "999", "555", "/subtitle/key"):
+        assert private not in serialized

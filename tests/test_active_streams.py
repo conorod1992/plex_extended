@@ -316,3 +316,38 @@ def test_limit_reports_truncation_without_hiding_match_count() -> None:
     assert result["matching_sessions"] == 3
     assert result["count"] == 2
     assert result["truncated"] is True
+
+
+
+def test_summary_counts_all_filtered_sessions_before_limit() -> None:
+    """Summary counts include hidden rows and remain scoped to the filters."""
+    hardware = SimpleNamespace(
+        videoDecision="transcode",
+        audioDecision="copy",
+        subtitleDecision=None,
+        transcodeHwFullPipeline=True,
+    )
+    sessions = [
+        FakeItem(user="Guest", player=_player(state="playing", local=False)),
+        FakeItem(user="Guest", player=_player(state="paused", local=None), transcode=hardware),
+        FakeItem(user="Guest", player=_player(state="buffering", local=True),
+                 transcode=SimpleNamespace(videoDecision="copy", audioDecision="copy", subtitleDecision=None)),
+        FakeItem(user="Other", player=_player(state="playing", local=True)),
+    ]
+    result = _active_streams(FakeClient(sessions), {"user": "Guest", "limit": 1})
+    summary = result["summary"]
+
+    assert result["total_sessions"] == 4
+    assert result["matching_sessions"] == 3
+    assert result["count"] == 1
+    assert result["truncated"] is True
+    assert (summary["playing"], summary["paused"], summary["buffering"]) == (1, 1, 1)
+    assert (summary["direct_playing"], summary["transcoding"], summary["direct_streaming"]) == (1, 1, 1)
+    assert summary["hardware_transcoding"] == 1
+    assert (summary["remote_sessions"], summary["local_sessions"], summary["unknown_locality"]) == (1, 1, 1)
+
+
+def test_empty_stream_summary_has_zero_counts() -> None:
+    result = _active_streams(FakeClient([]), {})
+    assert result["matching_sessions"] == 0
+    assert all(value == 0 for value in result["summary"].values())

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from math import isfinite
 from typing import Any
 
 from plexapi.exceptions import Unauthorized
@@ -47,6 +48,41 @@ def _is_played(episode: Any) -> bool:
 def _is_in_progress(episode: Any) -> bool:
     """Return whether an episode has progress but is not fully played."""
     return not _is_played(episode) and int(getattr(episode, "viewOffset", 0) or 0) > 0
+
+
+def _remaining_duration(episodes: list[Any]) -> dict[str, Any]:
+    """Sum known playback time remaining, without inventing missing durations."""
+    remaining_ms = 0
+    counted = 0
+    missing = 0
+    for episode in episodes:
+        if _is_played(episode):
+            continue
+        raw_duration = getattr(episode, "duration", None)
+        try:
+            duration = float(raw_duration) if raw_duration is not None else -1.0
+        except (TypeError, ValueError, OverflowError):
+            duration = -1.0
+        if not isfinite(duration) or duration <= 0:
+            missing += 1
+            continue
+
+        try:
+            offset = float(getattr(episode, "viewOffset", 0) or 0)
+        except (TypeError, ValueError, OverflowError):
+            offset = 0.0
+        if not isfinite(offset):
+            offset = 0.0
+        offset = max(0.0, min(offset, duration))
+        remaining_ms += round(duration - offset)
+        counted += 1
+
+    return {
+        "remaining_duration_ms": remaining_ms,
+        "remaining_duration_minutes": round(remaining_ms / 60_000, 1),
+        "duration_counted_episodes": counted,
+        "duration_missing_episodes": missing,
+    }
 
 
 def _episode_payload(
@@ -224,6 +260,7 @@ def _season_summaries(episodes: list[Any]) -> list[dict[str, Any]]:
                 if total
                 else 0.0,
                 "complete": bool(total and watched == total),
+                **_remaining_duration(season_episodes),
             }
         )
     return result
@@ -362,6 +399,7 @@ def _watch_status(
         ),
     }
     result.update(context.response_fields())
+    result.update(_remaining_duration(episodes))
     if include_seasons:
         result["seasons"] = _season_summaries(episodes)
     return result
