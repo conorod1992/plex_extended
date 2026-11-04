@@ -330,7 +330,7 @@ def test_watchlist_passes_filter_sort_and_media_type_to_plex() -> None:
             "filter": "released",
             "sort": "rating:asc",
             "libtype": "movie",
-            "maxresults": 5,
+            "maxresults": 6,  # Request one extra for truncation detection.
         }
     ]
 

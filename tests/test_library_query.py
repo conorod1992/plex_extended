@@ -268,7 +268,7 @@ def test_query_auto_selects_single_compatible_library() -> None:
     assert result["results"][0]["collections"] == ["Alien Collection"]
     call = movies.search_calls[0]
     assert call["libtype"] == "movie"
-    assert call["maxresults"] == 5
+    assert call["maxresults"] == 6  # Request one extra for truncation detection.
     assert call["filters"] == {"genre": ["Horror"], "unwatched": True}
 
 
