@@ -218,6 +218,7 @@ DETAILS_SCHEMA = vol.Schema(
         **USER_SCHEMA,
         vol.Required("rating_key"): cv.string,
         vol.Optional("include_technical", default=True): cv.boolean,
+        vol.Optional("include_streams", default=False): cv.boolean,
     }
 )
 

@@ -113,6 +113,8 @@ Language/label/country/duplicate/unmatched criteria use Plex server-side filteri
 
 If no library is supplied, Plex Extended auto-selects a library only when exactly one compatible library exists. It intentionally exposes a curated typed schema instead of arbitrary raw Plex filter dictionaries.
 
+The response includes `results_truncated`: Plex Extended fetches one extra matching item to distinguish a complete result from a bounded list. This does not provide an offset/pagination API or a total match count.
+
 ### `plex_extended.library_summary`
 
 Counts and aggregates media matching the same structured filters as `query_library`, without returning a large item list.
@@ -195,6 +197,8 @@ You can target a show by title or stable Plex `rating_key`. The response include
 
 Season 0/specials are excluded by default. Plex Extended prefers Plex's own On Deck result for the next episode and falls back to canonical episode order where needed.
 
+The response also provides `remaining_duration_ms` and `remaining_duration_minutes`, summing known durations of unfinished episodes minus any recorded playback offset. `duration_counted_episodes` and `duration_missing_episodes` disclose how many unfinished episodes have usable duration metadata. Missing durations are **not** assumed to be zero; treat the result as a known-time subtotal when any are missing. Season summaries include the same fields.
+
 ### `plex_extended.tv_catch_up`
 
 Returns remaining TV episodes across shows for the selected/default Plex user.
@@ -272,6 +276,8 @@ response_variable: plex_item
 
 Technical metadata can include container, bitrate, resolution, codecs, dimensions, frame rate and audio channels. Local media filesystem paths are intentionally not returned.
 
+Set `include_streams: true` for opt-in per-part video/audio/subtitle stream details, such as codec, language, selected/default/forced flags, and audio channel layout. Plex edition metadata is returned when present. `include_streams` implies media-version details even if `include_technical: false`. Stream IDs, file paths, part keys, and URLs are excluded. Availability of optional attributes depends on Plex metadata and its media type.
+
 ### `plex_extended.active_streams`
 
 Returns current Plex playback sessions without controlling playback.
@@ -290,6 +296,8 @@ Results can include Plex user, media/progress, player/product/platform, local/re
 Delivery is classified as `direct_play`, `direct_stream`, `transcode`, or `unknown`. Client IP/public addresses, device machine identifiers, Plex tokens, session IDs and local file paths are intentionally excluded.
 
 Filters are available for Plex username, media type, playback state, local/remote location and result limit.
+
+The `summary` object counts playing/paused/buffering sessions, delivery modes, hardware transcodes and local/remote/unknown locality across **all sessions matching the requested filters**, including sessions beyond `limit`. `total_sessions` still counts all server sessions, while `matching_sessions` counts filtered sessions. The summary is not limited to the displayed results.
 
 ## Viewing-state writes
 
@@ -338,6 +346,8 @@ response_variable: plex_collection
 ```
 
 If multiple collections share a title, Plex Extended does not guess. Use `rating_key` or a library selector.
+
+Collection/playlist list and item actions return `results_truncated`. The collection and playlist lists additionally report `matching_collections` and `matching_playlists` before applying the result limit. Collection/playlist item truncation is detected by fetching one extra matching item, without loading the whole contents.
 
 ### `plex_extended.list_playlists`
 
@@ -428,7 +438,7 @@ Supported Watchlist filters are `all`, `available`, and `released`. Sorting supp
 
 When local matching is enabled, results report whether the title is present on the configured Plex server and can include its local rating key/library identity.
 
-Watchlist is a **plex.tv account-level** feature. The integration's Default Plex user and per-call household-user selectors do not apply.
+Watchlist is a **plex.tv account-level** feature. The integration's Default Plex user and per-call household-user selectors do not apply. Its response includes `results_truncated` based on one extra Plex Watchlist item; this does not currently expose pagination.
 
 ### `plex_extended.add_to_watchlist` / `plex_extended.remove_from_watchlist`
 

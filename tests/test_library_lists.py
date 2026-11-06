@@ -330,7 +330,7 @@ def test_watchlist_passes_filter_sort_and_media_type_to_plex() -> None:
             "filter": "released",
             "sort": "rating:asc",
             "libtype": "movie",
-            "maxresults": 5,
+            "maxresults": 6,  # Request one extra for truncation detection.
         }
     ]
 
@@ -547,3 +547,40 @@ def test_real_plexapi_playlist_unauthorized_requests_reauth_then_recovers() -> N
             assert handler.items_request_count == 2
 
         asyncio.run(sequence())
+
+
+
+def test_browse_truncation_is_truthful_for_lists_and_content() -> None:
+    """Limited browse results expose whether another matching item exists."""
+    films = [_media(f"Film {i}", rating_key=str(i + 100)) for i in range(3)]
+    collection = FakeCollection("Group", "88", items=films)
+    section = FakeSection(1, "Movies", collections=[collection])
+    playlists = [FakePlaylist(f"Playlist {i}", str(i + 1), items=films) for i in range(3)]
+    client = _client(FakeServer(sections=[section], playlists=playlists))
+
+    col_items = _collection_items(client, {"rating_key": "88", "limit": 2})
+    pl_items = _playlist_items(client, {"rating_key": "1", "limit": 2})
+    pl_list = _list_playlists(client, {"limit": 2})
+    col_list = _list_collections(client, {"limit": 2})
+
+    assert col_items["count"] == 2 and col_items["results_truncated"]
+    assert pl_items["count"] == 2 and pl_items["results_truncated"]
+    assert pl_list["matching_playlists"] == 3 and pl_list["results_truncated"]
+    assert col_list["matching_collections"] == 1 and not col_list["results_truncated"]
+    assert not _playlist_items(client, {"rating_key": "1", "limit": 3})["results_truncated"]
+
+
+def test_watchlist_truncation_uses_one_extra_item_without_extra_guid_lookups() -> None:
+    """The invisible sentinel Watchlist item must not trigger local matching."""
+    account = FakeAccount([
+        SimpleNamespace(type="movie", title=f"Movie {i}", guid=f"plex://movie/{i}")
+        for i in range(3)
+    ])
+    server = FakeServer(account=account)
+    client = _client(server)
+    result = _watchlist(client, {"limit": 2, "include_summary": False, "match_local": True})
+
+    assert result["count"] == 2 and result["results_truncated"]
+    assert account.calls[0]["maxresults"] == 3
+    assert len(server.library.search_calls) == 2
+    assert not _watchlist(client, {"limit": 3, "include_summary": False})["results_truncated"]

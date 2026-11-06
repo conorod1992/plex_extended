@@ -168,10 +168,13 @@ def _list_collections(client: PlexExtendedClient, criteria: dict[str, Any]) -> d
             collections.append(collection)
 
     collections.sort(key=lambda item: str(getattr(item, "title", "")).casefold())
+    matching_collections = len(collections)
     collections = collections[:max_results]
     result: dict[str, Any] = {
         "success": True,
         "count": len(collections),
+        "matching_collections": matching_collections,
+        "results_truncated": matching_collections > len(collections),
         "collections": [
             _serialize_collection(item, include_summary) for item in collections
         ],
@@ -259,12 +262,14 @@ def _collection_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> d
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    items = _limited_contents(collection, "/children", media_types, max_results)
+    candidates = _limited_contents(collection, "/children", media_types, max_results + 1)
+    items = candidates[:max_results]
 
     result: dict[str, Any] = {
         "success": True,
         "collection": _serialize_collection(collection, include_summary=False),
         "count": len(items),
+        "results_truncated": len(candidates) > max_results,
         "results": [
             client._serialize_item(item, include_summary=include_summary) for item in items
         ],
@@ -332,10 +337,14 @@ def _list_playlists(client: PlexExtendedClient, criteria: dict[str, Any]) -> dic
             title=title,
             sort="titleSort:asc",
         )
-    )[:max_results]
+    )
+    matching_playlists = len(playlists)
+    playlists = playlists[:max_results]
     result: dict[str, Any] = {
         "success": True,
         "count": len(playlists),
+        "matching_playlists": matching_playlists,
+        "results_truncated": matching_playlists > len(playlists),
         "playlists": [
             _serialize_playlist(item, include_summary) for item in playlists
         ],
@@ -361,11 +370,13 @@ def _playlist_items(client: PlexExtendedClient, criteria: dict[str, Any]) -> dic
     include_summary = bool(criteria.get("include_summary", True))
     media_types = set(criteria.get("media_types") or [])
 
-    items = _limited_contents(playlist, "/items", media_types, max_results)
+    candidates = _limited_contents(playlist, "/items", media_types, max_results + 1)
+    items = candidates[:max_results]
     result: dict[str, Any] = {
         "success": True,
         "playlist": _serialize_playlist(playlist, include_summary=False),
         "count": len(items),
+        "results_truncated": len(candidates) > max_results,
         "results": [
             client._serialize_item(item, include_summary=include_summary) for item in items
         ],
@@ -462,7 +473,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             filter=None if filter_name == "all" else filter_name,
             sort=f"{sort_field}:{sort_order}",
             libtype=media_type,
-            maxresults=max_results,
+            maxresults=max_results + 1,
         )
     except Unauthorized as err:
         if client.entry.data.get(CONF_ACCOUNT_TOKEN):
@@ -474,6 +485,7 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             "Reconnect Plex Extended using Connect with Plex."
         ) from err
 
+    candidates = list(items)
     local_match_cache: dict[tuple[str, str], list[Any]] = {}
     results = [
         _serialize_watchlist_item(
@@ -484,11 +496,12 @@ def _watchlist(client: PlexExtendedClient, criteria: dict[str, Any]) -> dict[str
             match_local=match_local,
             local_match_cache=local_match_cache,
         )
-        for item in list(items)[:max_results]
+        for item in candidates[:max_results]
     ]
     return {
         "success": True,
         "count": len(results),
+        "results_truncated": len(candidates) > max_results,
         "account_scope": "configured_plex_account",
         "match_local": match_local,
         "results": results,

@@ -418,3 +418,43 @@ def test_on_deck_episode_outside_show_is_not_returned() -> None:
     show = FakeShow("Resident Alien", "10", [first], on_deck=foreign)
     result = _watch_status(_client(FakeServer([show])), {"rating_key": "10", "include_summary": False})
     assert result["next_episode"]["season_episode"] == "S01E01"
+
+
+
+def test_remaining_viewing_time_counts_known_minutes_and_excludes_watched() -> None:
+    """A half-viewed episode contributes only its unplayed portion."""
+    watched = _episode(1, 1, "Watched", watched=True)
+    half = _episode(1, 2, "Half", offset=1_200_000)
+    unwatched = _episode(2, 1, "Unwatched")
+    show = FakeShow("Time Show", "123", [watched, half, unwatched])
+
+    result = _watch_status(_client(FakeServer([show])), {"rating_key": "123"})
+
+    assert result["remaining_duration_ms"] == 3_600_000
+    assert result["remaining_duration_minutes"] == 60.0
+    assert result["duration_counted_episodes"] == 2
+    assert result["duration_missing_episodes"] == 0
+    assert result["seasons"][0]["remaining_duration_minutes"] == 20.0
+    assert result["seasons"][1]["remaining_duration_minutes"] == 40.0
+
+
+def test_remaining_viewing_time_reports_missing_and_clamps_bad_offsets() -> None:
+    """Missing durations must be visible and impossible offsets must be clamped."""
+    missing = _episode(1, 1, "Missing")
+    missing.duration = None
+    overrun = _episode(1, 2, "Overrun", offset=999_999_999)
+    untouched = _episode(1, 3, "Untouched")
+    untouched.viewOffset = -30_000
+    special = _episode(0, 1, "Special")
+    show = FakeShow("Time Show", "124", [special, missing, overrun, untouched])
+
+    default = _watch_status(_client(FakeServer([show])), {"rating_key": "124"})
+    assert default["remaining_duration_minutes"] == 40.0
+    assert default["duration_counted_episodes"] == 2
+    assert default["duration_missing_episodes"] == 1
+    assert default["seasons"][0]["duration_missing_episodes"] == 1
+
+    with_specials = _watch_status(
+        _client(FakeServer([show])), {"rating_key": "124", "include_specials": True}
+    )
+    assert with_specials["remaining_duration_minutes"] == 80.0

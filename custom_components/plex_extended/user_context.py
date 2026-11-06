@@ -172,6 +172,7 @@ def _media_details_for_context(
         criteria["rating_key"],
         bool(criteria.get("include_technical", True)),
         context.server,
+        include_streams=bool(criteria.get("include_streams", False)),
     )
     result.update(context.response_fields())
     return result
